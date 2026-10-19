@@ -1,0 +1,8 @@
+services:
+  game:
+    build: .
+    ports:
+      - "${WEB_PORT:-2567}:2567"
+    environment:
+      PATCH_HZ: ${PATCH_HZ:-30}
+    restart: unless-stopped

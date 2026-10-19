@@ -1,0 +1,9 @@
+{
+  "name": "shared",
+  "private": true,
+  "type": "module",
+  "exports": { "./*": "./src/*.ts" },
+  "scripts": {
+    "test": "tsx --test src/*.test.ts"
+  }
+}
