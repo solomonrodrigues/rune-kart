@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+  <title>Rune Kart</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(circle at 50% 30%, #1b2a6b, #0b1020 70%); color: #fff; font: 16px system-ui, sans-serif; }
+    main { width: min(420px, 100% - 32px); text-align: center; }
+    h1 { font-size: 44px; margin: 0 0 4px; letter-spacing: 1px; }
+    p { margin: 0 0 28px; color: #b8c4ff; }
+    button, input { font: inherit; border-radius: 10px; border: 0; }
+    button { width: 100%; padding: 14px; background: #4f6bff; color: #fff; font-weight: 700; cursor: pointer; }
+    button:hover:not(:disabled) { background: #6a82ff; }
+    button:disabled { opacity: .6; cursor: default; }
+    form { display: flex; gap: 8px; margin-top: 20px; }
+    form button { width: auto; padding: 14px 20px; background: #2c3a80; }
+    input { flex: 1; min-width: 0; padding: 14px; background: #ffffff14; color: #fff; border: 1px solid #ffffff30; }
+    #status { min-height: 24px; margin-top: 18px; color: #ffb4b4; }
+    small { display: block; margin-top: 28px; color: #8590c8; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Rune Kart</h1>
+    <p>Race on your network</p>
+    <button id="host">Host a race</button>
+    <form id="join">
+      <label for="addr" hidden>Host address</label>
+      <input id="addr" placeholder="Host address, e.g. 192.168.1.20" autocomplete="off" spellcheck="false" />
+      <button>Join</button>
+    </form>
+    <div id="status" role="status"></div>
+    <small>F11 fullscreen · F1 back to this screen</small>
+  </main>
+  <script>
+    const status = document.getElementById('status');
+    const busy = (on, text = '') => { document.querySelectorAll('button').forEach(b => (b.disabled = on)); status.textContent = text; };
+    const run = async (call, text) => {
+      busy(true, text);
+      const r = await call();
+      if (!r.ok) busy(false, r.error);
+    };
+    const addr = document.getElementById('addr');
+    addr.value = localStorage.getItem('lastHost') || '';
+    document.getElementById('host').onclick = () => run(() => window.runeKart.host(), 'Starting server…');
+    document.getElementById('join').onsubmit = e => {
+      e.preventDefault();
+      try { localStorage.setItem('lastHost', addr.value); } catch {}
+      run(() => window.runeKart.join(addr.value), 'Connecting…');
+    };
+  </script>
+</body>
+</html>
