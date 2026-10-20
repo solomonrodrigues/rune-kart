@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { driftTier, KART, type KartState } from 'shared/kart';
 import { SPELLS } from 'shared/spells';
+import { Monkey } from './Monkey';
 
 const flat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 const TIER_COLOURS = [0x000000, 0x4fc3ff, 0xff9d2e, 0xd65cff];
@@ -14,11 +15,12 @@ export class KartModel {
   private sparks: THREE.Mesh[] = [];
   private flame: THREE.Mesh;
   private ward: THREE.Mesh;
+  private driver = new Monkey();
   private slide = 0;
   private wheelSpin = 0;
 
   constructor(color: number) {
-    const paint = flat(color), dark = flat(0x222428), skin = flat(0xf1c27d);
+    const paint = flat(color), dark = flat(0x222428);
     const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, y, z);
@@ -30,8 +32,8 @@ export class KartModel {
     add(new THREE.BoxGeometry(0.9, 0.3, 0.7), paint, 0, 0.55, 0.85);          // nose
     add(new THREE.BoxGeometry(1.5, 0.12, 0.4), dark, 0, 0.75, -1.05);         // rear wing
     add(new THREE.BoxGeometry(0.6, 0.5, 0.5), dark, 0, 0.85, -0.3);           // seat
-    add(new THREE.IcosahedronGeometry(0.32, 0), skin, 0, 1.3, -0.25);         // driver head
-    add(new THREE.CylinderGeometry(0.33, 0.33, 0.2, 6), dark, 0, 1.1, -0.25); // collar
+    this.driver.root.position.set(0, 0.75, -0.3);
+    this.body.add(this.driver.root);
 
     const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.3, 8).rotateZ(Math.PI / 2);
     for (const [x, z, front] of [[0.75, 0.75, 1], [-0.75, 0.75, 1], [0.8, -0.7, 0], [-0.8, -0.7, 0]] as const) {
@@ -91,6 +93,7 @@ export class KartModel {
     this.wheelSpin += (speed / 0.32) * dt;
     for (const w of this.wheels) w.rotation.x = this.wheelSpin;
     for (const w of this.frontWheels) w.rotation.y = -k.steer * 0.4;
+    this.driver.update(k.steer);
 
     const tier = driftTier(k);
     for (const s of this.sparks) {
