@@ -12,4 +12,6 @@ Open `/?offline` to drive solo with the sim running locally (no network). In off
 
 Online, your kart is predicted locally and reconciled against the server; other karts are drawn 100 ms in the past between server snapshots. Add `?lag=150` to simulate a 150 ms round trip on localhost.
 
-Controls: WASD / arrows to drive, Space or Shift to drift (hold while steering, release for a boost; sparks go blue → orange → purple).
+Racing: everyone presses Enter in the lobby to ready up, then a 3 s countdown, 3 laps (`LAPS=1 docker compose up -d` for quick test races), results for 10 s, and back to the lobby.
+
+Controls: Enter to ready up, WASD / arrows to drive, Space or Shift to drift (hold while steering, release for a boost; sparks go blue → orange → purple).

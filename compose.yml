@@ -5,4 +5,5 @@ services:
       - "${WEB_PORT:-2567}:2567"
     environment:
       PATCH_HZ: ${PATCH_HZ:-30}
+      LAPS: ${LAPS:-3}
     restart: unless-stopped

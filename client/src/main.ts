@@ -7,6 +7,7 @@ import { createTrack, spawnPoint } from 'shared/track';
 import { GREYBOX } from 'shared/tracks';
 import { KartModel } from './KartModel';
 import { buildScene } from './scene';
+import { renderRace, type RaceView, type Standing } from './raceUi';
 
 const OFFLINE = new URLSearchParams(location.search).has('offline');
 const hud = document.getElementById('hud')!;
@@ -84,7 +85,9 @@ const params = new URLSearchParams(location.search);
 const LAG = Math.max(0, Number(params.get('lag')) || 0);
 const delayed = (fn: () => void) => (LAG ? setTimeout(fn, LAG / 2) : fn());
 
-let banner = ''; // shown above the HUD, e.g. on disconnect
+let notice = ''; // shown above the HUD, e.g. on disconnect
+let race: RaceView | null = null; // latest race state (online only)
+let myId = '';
 let send = (_: SeqInput) => {};
 let start: KartState = newKart(spawnPoint(track, 0));
 let myColor = 0xe84a3c;
@@ -98,7 +101,12 @@ if (!OFFLINE) {
     throw err;
   });
   let connected = true;
-  room.onLeave(() => { connected = false; banner = 'Disconnected from server — reload to rejoin.<br>'; });
+  room.onLeave(() => { connected = false; notice = 'Disconnected from server — reload to rejoin.<br>'; });
+  myId = room.sessionId;
+  addEventListener('keydown', e => {
+    const me = race?.standings.find(s => s.id === myId);
+    if (e.code === 'Enter' && race?.phase === 'lobby' && connected) room.send('ready', !me?.ready);
+  });
   send = input => delayed(() => { if (connected) room.send('input', input); });
 
   // Wait for our kart so prediction starts from the server's spawn.
@@ -112,9 +120,15 @@ if (!OFFLINE) {
   room.onStateChange(state => {
     // Copy out now (the live state keeps changing), deliver after the simulated lag.
     const snap: [string, KartState, number, number][] = [];
-    state.karts.forEach((k: any, id: string) => snap.push([id, copyKart(newKart(k), k), k.ack, k.color]));
+    const standings: Standing[] = [];
+    state.karts.forEach((k: any, id: string) => {
+      snap.push([id, copyKart(newKart(k), k), k.ack, k.color]);
+      standings.push({ id, color: k.color, place: k.place, finishTime: k.finishTime, lap: k.lap, racing: k.racing, ready: k.ready });
+    });
+    const view = { phase: state.phase, timer: state.timer, laps: state.laps, standings };
     delayed(() => {
       const now = performance.now();
+      race = { ...view, at: now };
       for (const [id, s, ack, color] of snap) {
         if (id === room.sessionId) { onServerState(s, ack); continue; }
         let r = remotes.get(id);
@@ -162,7 +176,8 @@ let last = performance.now();
 renderer.setAnimationLoop(now => {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  const input = readInput();
+  // Frozen on the grid during the countdown (the server enforces this too).
+  const input = race?.phase === 'countdown' ? { steer: 0, throttle: 0, drift: false } : readInput();
 
   acc = Math.min(acc + dt, 0.25);
   while (acc >= DT) {
@@ -198,7 +213,8 @@ renderer.setAnimationLoop(now => {
 
   const tier = driftTier(k);
   const racers = remotes.size + 1;
-  hud.innerHTML = banner +
+  const raceLine = renderRace(race, myId, now);
+  hud.innerHTML = notice + (raceLine ? `<b>${raceLine}</b><br>` : '') +
     `<b>${Math.round(Math.abs(speed) * 3.6)}</b> km/h` +
     (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
     (k.boostTime > 0 ? ' · BOOST' : '') +

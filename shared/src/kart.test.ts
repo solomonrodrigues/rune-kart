@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { stepKart, clampInput, newKart, driftTier, kartSpeed, KART, type KartInput, type KartState } from './kart.ts';
 import { createTrack, spawnPoint } from './track.ts';
 import { GREYBOX } from './tracks.ts';
+import { autopilot as followTrack } from './race.ts';
 
 const track = createTrack(GREYBOX);
 const drive = (ticks: number, input: (i: number) => KartInput, k: KartState = newKart(spawnPoint(track, 0))) => {
@@ -24,14 +25,7 @@ test('a spawned kart settles on the road', () => {
   assert.ok(Math.abs(k.y - s.y) < 0.2, `y=${k.y}`);
 });
 
-// Steer towards the centreline a few samples ahead — enough of a driver to stay on the road.
-const autopilot = (k: KartState): KartInput => {
-  let best = 0, bestD = Infinity;
-  track.samples.forEach((s, i) => { const d = (s.x - k.x) ** 2 + (s.z - k.z) ** 2; if (d < bestD) { bestD = d; best = i; } });
-  const t = track.samples[(best + 4) % track.samples.length];
-  const diff = Math.atan2(Math.sin(Math.atan2(t.x - k.x, t.z - k.z) - k.yaw), Math.cos(Math.atan2(t.x - k.x, t.z - k.z) - k.yaw));
-  return { steer: Math.max(-1, Math.min(1, -diff * 3)), throttle: 1, drift: false };
-};
+const autopilot = (k: KartState) => followTrack(track, k);
 
 test('an autopilot lap stays on the road near top speed', () => {
   const k = newKart(spawnPoint(track, 0));
