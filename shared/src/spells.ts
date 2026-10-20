@@ -32,7 +32,12 @@ export const MANA = {
   hasteBoost: 1.2,   // seconds of boost
   wardTime: 6,       // seconds a ward lasts unless it blocks a hit first
   stunTime: 1.0,     // seconds spun out when hit
-  smite: { speed: 55, life: 2.0, radius: 1.3, height: 0.6 },
+  smite: {
+    speed: 55, life: 2.0, radius: 1.3, height: 0.6,
+    // Homing: locks on to a kart within `acquire` of its heading and `range` metres, turns at most `turnRate`
+    // rad/s towards it, and lets go if the target ends up more than `lose` off its nose.
+    acquire: 0.52, lose: 1.2, range: 60, turnRate: 2.0,
+  },
   snare: { life: 20, radius: 1.6, arm: 0.6, behind: 3, maxPerKart: 3 },
 };
 
@@ -67,23 +72,57 @@ export interface Effect {
   x: number; y: number; z: number;
   vx: number; vz: number;
   age: number;
+  target: string; // smite's homing lock ('' for none)
 }
 
 export function spawnEffect(id: number, spell: Spell, owner: string, k: KartState): Effect | null {
   const fx = Math.sin(k.yaw), fz = Math.cos(k.yaw);
   if (spell.id === 'smite') {
     const speed = Math.max(0, k.vx * fx + k.vz * fz) + MANA.smite.speed;
-    return { id, kind: 'smite', owner, x: k.x + fx * 2, y: k.y + MANA.smite.height, z: k.z + fz * 2, vx: fx * speed, vz: fz * speed, age: 0 };
+    return { id, kind: 'smite', owner, x: k.x + fx * 2, y: k.y + MANA.smite.height, z: k.z + fz * 2, vx: fx * speed, vz: fz * speed, age: 0, target: '' };
   }
   if (spell.id === 'snare') {
     const b = MANA.snare.behind;
-    return { id, kind: 'snare', owner, x: k.x - fx * b, y: k.y, z: k.z - fz * b, vx: 0, vz: 0, age: 0 };
+    return { id, kind: 'snare', owner, x: k.x - fx * b, y: k.y, z: k.z - fz * b, vx: 0, vz: 0, age: 0, target: '' };
   }
   return null;
 }
 
 const ray = new Ray(new Vector3(), new Vector3(0, -1, 0));
 const centre = new Vector3();
+
+/** Smite aim assist: keep (or pick) a target ahead and turn the bolt towards it at a limited rate. */
+function homeIn(e: Effect, karts: [string, KartState][], dt: number) {
+  const H = MANA.smite;
+  const speed = Math.hypot(e.vx, e.vz);
+  if (!speed) return;
+  const hx = e.vx / speed, hz = e.vz / speed;
+  // Cosine of the angle off the bolt's nose, or null if out of range.
+  const offNose = (k: KartState) => {
+    const ox = k.x - e.x, oz = k.z - e.z, d = Math.hypot(ox, oz);
+    return d < 0.01 || d > H.range ? null : { cos: (ox * hx + oz * hz) / d, d };
+  };
+  let target = e.target ? karts.find(([id]) => id === e.target)?.[1] : undefined;
+  const held = target && offNose(target);
+  if (!held || held.cos < Math.cos(H.lose)) { target = undefined; e.target = ''; }
+  if (!target) {
+    let best = -Infinity;
+    for (const [id, k] of karts) {
+      if (id === e.owner) continue; // never home on the caster
+      const o = offNose(k);
+      if (!o || o.cos < Math.cos(H.acquire)) continue;
+      const score = o.cos - o.d / H.range; // prefer near, and near the nose
+      if (score > best) { best = score; target = k; e.target = id; }
+    }
+  }
+  if (!target) return;
+  const heading = Math.atan2(hx, hz);
+  const want = Math.atan2(target.x - e.x, target.z - e.z);
+  const diff = Math.atan2(Math.sin(want - heading), Math.cos(want - heading));
+  const turn = Math.max(-H.turnRate * dt, Math.min(H.turnRate * dt, diff));
+  e.vx = Math.sin(heading + turn) * speed;
+  e.vz = Math.cos(heading + turn) * speed;
+}
 
 /** Lands a hit on a kart: a ward absorbs it, otherwise the kart spins out. */
 export function hitKart(k: KartState): 'warded' | 'stunned' {
@@ -104,6 +143,7 @@ export function stepEffects(effects: Effect[], karts: [string, KartState][], tra
   for (const e of effects) {
     e.age += dt;
     if (e.kind === 'smite') {
+      homeIn(e, karts, dt);
       e.x += e.vx * dt; e.z += e.vz * dt;
       // Hug the road so smites follow ramps; die over a drop or into a wall.
       ray.origin.set(e.x, e.y + 3, e.z);

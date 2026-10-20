@@ -8,7 +8,7 @@ import { GREYBOX } from 'shared/tracks';
 import { KartModel } from './KartModel';
 import { EffectsView } from './effects';
 import { deniedCast, renderSpells } from './spellUi';
-import { NO_CAST, SPELLS, spawnEffect, stepEffects, type Effect } from 'shared/spells';
+import { MANA, NO_CAST, SPELLS, spawnEffect, stepEffects, type Effect } from 'shared/spells';
 import { buildScene, MOON_DIR } from './scene';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -157,7 +157,7 @@ if (!OFFLINE) {
     });
     const view = { phase: state.phase, timer: state.timer, laps: state.laps, standings };
     const fx: Effect[] = [];
-    state.effects.forEach((e: any) => fx.push({ id: e.id, kind: e.kind, owner: e.owner, x: e.x, y: e.y, z: e.z, vx: e.vx, vz: e.vz, age: e.age }));
+    state.effects.forEach((e: any) => fx.push({ id: e.id, kind: e.kind, owner: e.owner, x: e.x, y: e.y, z: e.z, vx: e.vx, vz: e.vz, age: e.age, target: e.target }));
     delayed(() => {
       const now = performance.now();
       race = { ...view, at: now };
@@ -207,7 +207,7 @@ onServerState = (server, ack) => {
 };
 
 // Live tuning/debugging from the console, e.g. KART.maxSpeed = 35
-Object.assign(window, { KART, me: local, correction, predictor });
+Object.assign(window, { KART, MANA, me: local, correction, predictor });
 
 // --- Camera ---
 let camYaw = local.yaw;
@@ -248,7 +248,7 @@ renderer.setAnimationLoop(now => {
   const k = lerpKart(localView, localPrev, local, acc / DT);
   k.x += correction.x; k.y += correction.y; k.z += correction.z; k.yaw += correction.yaw;
   localModel.update(k, dt, now / 1000);
-  effects.update(now, dt);
+  effects.update(now, dt, camera.position);
   renderSpells(local);
 
   const renderT = now - INTERP_DELAY;

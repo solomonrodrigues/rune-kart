@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { newKart, stepKart, kartSpeed, type KartState } from './kart.ts';
 import { MANA, SPELLS, NO_CAST, cooldownOf, spawnEffect, stepEffects, hitKart, type Effect } from './spells.ts';
-import { createTrack, spawnPoint } from './track.ts';
+import { createTrack, spawnPoint, GROUND_Y } from './track.ts';
 import { GREYBOX } from './tracks.ts';
 
 const track = createTrack(GREYBOX);
@@ -89,6 +89,42 @@ test('a smite that misses dies on the wall or expires', () => {
   let dead = new Set<Effect>();
   for (let i = 0; i < 60 * MANA.smite.life + 2 && !dead.size; i++) dead = stepEffects([e], [['me', caster]], track, 1 / 60);
   assert.ok(dead.has(e));
+});
+
+// Open ground away from the track, so walls don't get in the way of homing tests.
+const onGrass = (x: number, z: number) => {
+  const k = newKart({ x, y: GROUND_Y, z, yaw: 0 });
+  for (let i = 0; i < 10; i++) stepKart(k, idle(), track);
+  return k;
+};
+const fly = (e: Effect, karts: [string, KartState][], seconds: number) => {
+  for (let i = 0; i < seconds * 60; i++) if (stepEffects([e], karts, track, 1 / 60).size) return true;
+  return false;
+};
+
+test('smite homes onto a kart slightly off its line', () => {
+  const caster = onGrass(300, 300), target = onGrass(308, 330); // ~15° off the nose, 31 m away
+  const e = spawnEffect(1, SPELLS[slot('smite')], 'me', caster)!;
+  assert.ok(fly(e, [['me', caster], ['them', target]], 2), 'should connect');
+  assert.ok(target.stunTime > 0);
+});
+
+test('smite ignores karts well outside its cone, and never homes on its caster', () => {
+  const caster = onGrass(300, 300), side = onGrass(330, 305); // ~80° off the nose
+  const e = spawnEffect(1, SPELLS[slot('smite')], 'me', caster)!;
+  fly(e, [['me', caster], ['them', side]], 0.5);
+  assert.equal(e.target, '');
+  assert.ok(Math.abs(e.vx) < 1e-9, 'flies straight');
+  assert.equal(side.stunTime, 0);
+});
+
+test('smite turns at a limited rate, so a sharp dodge can escape it', () => {
+  const caster = onGrass(300, 300), target = onGrass(306, 316); // ~20° off, very close: needs a hard turn
+  const e = spawnEffect(1, SPELLS[slot('smite')], 'me', caster)!;
+  e.target = 'them';
+  stepEffects([e], [['me', caster], ['them', target]], track, 1 / 60);
+  const turned = Math.atan2(e.vx, e.vz);
+  assert.ok(turned > 0 && turned <= MANA.smite.turnRate / 60 + 1e-9, `turned ${turned} rad in one tick`);
 });
 
 test('a snare arms, then stuns whoever drives over it', () => {

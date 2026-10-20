@@ -12,7 +12,7 @@ LAN play from Docker: friends open `http://<your-ip>:2567` in a browser. Start w
 
 Desktop app (optional, for hosting without Docker): `npm run desktop` runs it; `npm run desktop:mac` / `desktop:win` build a DMG / portable .exe into `release/` (first `npm install --prefix electron`). It hosts the same server and shows your LAN address in the lobby; friends can join from the app or any browser.
 
-Open `/?offline` to drive solo with the sim running locally (no network). In offline mode the console exposes `KART` (live tuning, e.g. `KART.maxSpeed = 35`) and `me` (your kart state).
+Open `/?offline` to drive solo with the sim running locally (no network). In offline mode the console exposes `KART` and `MANA` (live tuning, e.g. `KART.maxSpeed = 35`, `MANA.smite.turnRate = 3`) and `me` (your kart state).
 
 Online, your kart is predicted locally and reconciled against the server; other karts are drawn 100 ms in the past between server snapshots. Add `?lag=150` to simulate a 150 ms round trip on localhost.
 

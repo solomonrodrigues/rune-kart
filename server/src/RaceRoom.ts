@@ -44,6 +44,7 @@ export class SpellEffect extends Schema implements Effect {
   @type('number') x = 0; @type('number') y = 0; @type('number') z = 0;
   @type('number') vx = 0; @type('number') vz = 0;
   @type('number') age = 0;
+  @type('string') target = '';
 }
 
 export class RaceState extends Schema {
