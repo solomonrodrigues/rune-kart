@@ -4,6 +4,7 @@ import { MANA, SPELLS } from 'shared/spells';
 import { Monkey } from './Monkey';
 import { mergeStatic } from './mergeStatic';
 import { RuneBurst, Sigil, Trail } from './arcane';
+import { crowGeometry } from './atmosphere';
 
 const flat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 // Over-bright (HDR) colours: anything past the bloom threshold glows, so every spark tier, the boost
@@ -38,7 +39,10 @@ export class KartModel {
   private trails = [0, 1, 2, 3].map(() => new Trail());
   private twist = 0;
   private burst = new RuneBurst();
-  private sigil = new Sigil();             // the rune sigil at the exhaust, the boost's source
+  private sigil = new Sigil();
+  // The rescue: a ring of crows that carry the kart back to the road, then fly off.
+  private crows = new THREE.InstancedMesh(crowGeometry(), new THREE.MeshBasicMaterial({ color: 0x07060a, side: THREE.DoubleSide }), 7);
+  private crowM = new THREE.Matrix4(); private crowQ = new THREE.Quaternion(); private crowP = new THREE.Vector3(); private crowS = new THREE.Vector3();             // the rune sigil at the exhaust, the boost's source
   private lastBoost = 0;
   private v1 = new THREE.Vector3();
   private fwdW = new THREE.Vector3();
@@ -137,7 +141,9 @@ export class KartModel {
     this.body.add(this.flame);
     this.sigil.group.position.set(0, 0.62, -1.3); // just behind the orb, so it glows in the sigil's centre
     this.body.add(this.sigil.group);
-    this.fx.add(...this.trails.map(t => t.mesh), this.burst.group);
+    this.fx.add(...this.trails.map(t => t.mesh), this.burst.group, this.crows);
+    this.crows.frustumCulled = false;
+    this.crows.visible = false;
 
     // Headlights: glowing lamps and faint beams through the dusk. (Light on the road comes from your own
     // kart's spotlight, which follows ramps; a flat decal here would cut into them.)
@@ -200,6 +206,10 @@ export class KartModel {
 
   update(k: KartState, dt: number, time: number) {
     this.root.position.set(k.x, k.y, k.z);
+    // Being rescued: the crows lower the kart from on high, swaying, back onto the road.
+    const carry = k.rescue / KART.rescueHold; // 1 → 0
+    const lift = carry > 0 ? 4 * carry * carry : 0; // low enough that the chase camera sees the whole descent
+    this.root.position.y += lift;
     // Orient to the ground normal, keeping the heading.
     this.up.set(k.nx, k.ny, k.nz).normalize();
     this.fwd.set(Math.sin(k.yaw), 0, Math.cos(k.yaw)).addScaledVector(this.up, -this.fwd.dot(this.up)).normalize();
@@ -210,6 +220,18 @@ export class KartModel {
     this.slide += (-k.driftDir * 0.35 - this.slide) * (1 - Math.exp(-10 * dt));
     // Spun out: whirl the body until the stun wears off.
     this.body.rotation.y = this.slide + (k.stunTime > 0 ? k.stunTime * 14 : 0);
+    this.body.rotation.z = carry > 0 ? Math.sin(time * 3) * 0.12 * carry : 0;
+    this.crows.visible = carry > 0;
+    if (carry > 0) {
+      const away = Math.max(0, 0.2 - carry) * 40; // in the last moments they let go and fly up and off
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + time * 2.2;
+        this.crowP.set(k.x + Math.cos(a) * (1.4 + away * 0.3), k.y + lift + 1.7 + Math.sin(time * 5 + i) * 0.2 + away, k.z + Math.sin(a) * (1.4 + away * 0.3));
+        this.crowQ.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, -a);
+        this.crows.setMatrixAt(i, this.crowM.compose(this.crowP, this.crowQ, this.crowS.set(0.55, 0.55 * (0.2 + 0.6 * Math.sin(time * 14 + i)), 0.55)));
+      }
+      this.crows.instanceMatrix.needsUpdate = true;
+    }
     // Ward: in its last WARD_WARN seconds it blinks, faster and faster, so everyone can see it's about to drop.
     if (k.wardTime > 0 && k.wardTime < WARD_WARN) {
       const urgency = 1 - k.wardTime / WARD_WARN;               // 0 → 1 as it runs out
@@ -286,6 +308,8 @@ export class KartModel {
     for (const t of this.trails) t.dispose();
     this.burst.dispose();
     this.sigil.dispose();
+    this.crows.geometry.dispose();
+    (this.crows.material as THREE.Material).dispose();
     this.root.traverse(o => {
       if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
     });

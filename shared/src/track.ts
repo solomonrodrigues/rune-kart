@@ -150,10 +150,15 @@ export const LEVEL_WEIGHT = 3;
  * (×LEVEL_WEIGHT), so a kart on the lower road isn't matched to the bridge right above it, or vice versa.
  */
 export function nearestSample(track: Track, x: number, z: number, y?: number): TrackSample {
-  let best = track.samples[0], bestD = Infinity;
-  for (const s of track.samples) {
+  return track.samples[nearestIndex(track, x, z, y)];
+}
+
+/** Index of the sample nearest (x, z) — and y, if given (see nearestSample). */
+export function nearestIndex(track: Track, x: number, z: number, y?: number): number {
+  let best = 0, bestD = Infinity;
+  track.samples.forEach((s, i) => {
     const d = (s.x - x) ** 2 + (s.z - z) ** 2 + (y === undefined ? 0 : (LEVEL_WEIGHT * (s.y - y)) ** 2);
-    if (d < bestD) { bestD = d; best = s; }
-  }
+    if (d < bestD) { bestD = d; best = i; }
+  });
   return best;
 }

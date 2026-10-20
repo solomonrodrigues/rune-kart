@@ -28,6 +28,9 @@ export class Kart extends Schema implements KartState {
   @type('number') cd0 = 0; @type('number') cd1 = 0; @type('number') cd2 = 0; @type('number') cd3 = 0;
   @type('number') stunTime = 0;
   @type('number') wardTime = 0;
+  @type('number') offroadTime = 0;
+  @type('number') lastRoad = -1;
+  @type('number') rescue = 0;
   @type('number') color = 0xffffff;
   @type('number') ack = 0; // last input seq applied — the owning client replays everything after it
   // Race standing. `racing` is false for anyone who joined after the start; they free-drive until the next race.

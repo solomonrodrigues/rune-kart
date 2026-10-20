@@ -118,7 +118,7 @@ export function buildMist() {
 }
 
 // --- Crows: silhouettes circling and flapping, a flock over the road and a few over the castle ---
-const crowGeometry = () => {
+export const crowGeometry = () => {
   // A body point at the front and tail, and two wing tips; flapping scales the tips up and down (y).
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute([

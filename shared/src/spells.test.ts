@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newKart, stepKart, kartSpeed, type KartState } from './kart.ts';
+import { KART, newKart, stepKart, kartSpeed, type KartState } from './kart.ts';
 import { MANA, SPELLS, NO_CAST, cooldownOf, spawnEffect, stepEffects, hitKart, type Effect } from './spells.ts';
 import { createTrack, spawnPoint, GROUND_Y } from './track.ts';
 import { GREYBOX } from './tracks.ts';
@@ -94,7 +94,10 @@ test('a smite that misses dies on the wall or expires', () => {
 // Open ground away from the track, so walls don't get in the way of homing tests.
 const onGrass = (x: number, z: number) => {
   const k = newKart({ x, y: GROUND_Y, z, yaw: 0 });
+  const saved = KART.rescueDistance; // a test bench far from the road: don't let the crows carry it off
+  KART.rescueDistance = Infinity;
   for (let i = 0; i < 10; i++) stepKart(k, idle(), track);
+  KART.rescueDistance = saved;
   return k;
 };
 const fly = (e: Effect, karts: [string, KartState][], seconds: number) => {

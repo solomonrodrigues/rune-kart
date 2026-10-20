@@ -40,9 +40,9 @@ test('an autopilot lap stays on the road near top speed', () => {
 });
 
 test('holding a drift charges a tier and releasing it boosts', () => {
-  // Open grass well away from the track, already moving; offroad slowdown disabled to isolate the drift.
+  // Open grass well away from the track, already moving; offroad slowdown and rescue disabled to isolate the drift.
   const saved = { ...KART };
-  KART.offroadMax = KART.maxSpeed; KART.offroadDrag = 0;
+  KART.offroadMax = KART.maxSpeed; KART.offroadDrag = 0; KART.rescueDistance = KART.rescueAfter = Infinity;
   const k = newKart({ x: 300, y: 0, z: 300, yaw: 0 });
   k.vz = 20;
   drive(5, () => ({ steer: 0, throttle: 1, drift: false }), k);
@@ -63,10 +63,10 @@ const distToCentreline = (x: number, z: number) => Math.min(...track.samples.map
   return Math.hypot(x - a.x - dx * t, z - a.z - dz * t);
 }));
 
-// Start a drift at racing speed on open ground (offroad slowdown off) and hold it with a given steer.
+// Start a drift at racing speed on open ground (offroad slowdown and rescue off) and hold it with a given steer.
 function heldDrift(steer: number, ticks: number) {
   const saved = { ...KART };
-  Object.assign(KART, { offroadMax: KART.maxSpeed, offroadDrag: 0 });
+  Object.assign(KART, { offroadMax: KART.maxSpeed, offroadDrag: 0, rescueDistance: Infinity, rescueAfter: Infinity });
   const k = newKart({ x: 300, y: GROUND_Y, z: 300, yaw: 0 });
   drive(5, () => ({ steer: 0, throttle: 0, drift: false }), k);
   k.vz = 28;
@@ -99,7 +99,10 @@ test('a drift through a typical corner earns a boost', () => {
 test('releasing a drift points the kart and its boost along the direction of travel', () => {
   // Regression: the boost fired along the over-rotated nose, shoving karts off the inside of the corner.
   const { k } = heldDrift(1, 42);
+  const saved = KART.rescueDistance; // still on the test bench, far from the road
+  KART.rescueDistance = Infinity;
   drive(1, () => ({ steer: 1, throttle: 1, drift: false }), k);
+  KART.rescueDistance = saved;
   assert.ok(k.boostTime > 0, 'should boost');
   const travel = Math.atan2(k.vx, k.vz);
   const off = Math.abs(Math.atan2(Math.sin(travel - k.yaw), Math.cos(travel - k.yaw))) * 180 / Math.PI;
@@ -150,4 +153,50 @@ test('driving along the road edges never snags on the barrier or embankment', ()
 test('clampInput rejects garbage from the wire', () => {
   assert.deepEqual(clampInput({ steer: 9, throttle: NaN } as any), { steer: 1, throttle: 0, drift: false, cast: -1 });
   assert.deepEqual(clampInput(undefined), { steer: 0, throttle: 0, drift: false, cast: -1 });
+});
+
+// --- Rescue: carried back by the crows ---
+const half = GREYBOX.width / 2;
+/** A kart sitting `off` metres outside sample `i` (away from the infield), at ground level. */
+const offRoad = (i: number, off: number, k = newKart(spawnPoint(track, 0))) => {
+  const s = track.samples[i];
+  off *= track.outer;
+  Object.assign(k, { x: s.x - Math.cos(s.yaw) * off, y: GROUND_Y + 0.5, z: s.z + Math.sin(s.yaw) * off, vx: 0, vy: 0, vz: 0 });
+  return k;
+};
+const idle: KartInput = { steer: 0, throttle: 0, drift: false };
+
+test('a kart far from the road is rescued at once', () => {
+  const k = offRoad(10, half + KART.rescueDistance + 8);
+  stepKart(k, idle, track);
+  assert.ok(k.rescue > 0, 'rescued');
+  const s = track.samples[k.lastRoad];
+  assert.ok(Math.hypot(k.x - s.x, k.z - s.z) < 0.01, 'set down on the track');
+});
+
+test('a kart sat on the grass near the road is rescued after rescueAfter seconds, not before', () => {
+  const k = offRoad(10, half + 5);
+  drive(Math.round(60 * (KART.rescueAfter - 0.5)), () => idle, k);
+  assert.equal(k.rescue, 0, `not yet (offroad ${k.offroad}, grounded ${k.grounded}, ${k.offroadTime.toFixed(2)} s)`);
+  drive(60, () => idle, k);
+  assert.ok(k.rescue > 0, 'rescued');
+});
+
+test('a rescue returns you to where you left the road, so a shortcut gains nothing', () => {
+  const k = drive(60, () => gas);          // on the road near the start
+  const left = k.lastRoad;
+  offRoad(60, half + KART.rescueDistance + 8, k); // "cut" far ahead across the grass
+  stepKart(k, idle, track);
+  assert.equal(k.lastRoad, left);
+  assert.ok(Math.hypot(k.x - track.samples[left].x, k.z - track.samples[left].z) < 0.01, 'back where it left the road');
+});
+
+test('a rescued kart is held still for rescueHold, then drives on', () => {
+  const k = offRoad(10, half + KART.rescueDistance + 8);
+  stepKart(k, idle, track);
+  const at = { x: k.x, z: k.z };
+  drive(Math.round(60 * KART.rescueHold) - 2, () => gas, k);
+  assert.ok(Math.hypot(k.x - at.x, k.z - at.z) < 0.01, 'held');
+  drive(90, () => gas, k);
+  assert.ok(kartSpeed(k) > 5 && k.rescue === 0, `drives on (speed ${kartSpeed(k).toFixed(1)})`);
 });

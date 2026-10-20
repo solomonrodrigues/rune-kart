@@ -1,6 +1,6 @@
 // Arcade kart physics. Deterministic and free of DOM/Node APIs: the client and the server both run it.
 import { Ray, Vector3, DoubleSide } from 'three';
-import { nearestSample, type Track } from './track.ts';
+import { nearestIndex, nearestSample, type Track, type TrackSample } from './track.ts';
 import { MANA, NO_CAST, SPELLS, stepSpells, type Spell } from './spells.ts';
 
 export interface KartInput {
@@ -29,6 +29,10 @@ export interface KartState {
   cd0: number; cd1: number; cd2: number; cd3: number; // spell cooldowns, seconds left
   stunTime: number;   // spun out by a spell: no control until it runs out
   wardTime: number;   // a ward is up: absorbs the next hit
+  // Rescue (the crows): stray too far off the road, or sit on the grass too long, and you're carried back.
+  offroadTime: number; // seconds on the grass without touching the road
+  lastRoad: number;    // sample index where the kart was last on the road (-1 until it has been)
+  rescue: number;      // seconds left of being carried back: frozen until it runs out
 }
 
 // Tuning lives in one mutable object so it can be tweaked live from the console (window.KART).
@@ -47,6 +51,7 @@ export const KART = {
   radius: 0.7, probe: 1.5, snap: 0.45,
   wallBounce: 0.25,
   killY: -30,
+  rescueAfter: 4, rescueDistance: 25, rescueHold: 1.5, // seconds on grass / metres past the road edge / seconds carried
 };
 
 export const DT = 1 / 60;
@@ -57,6 +62,7 @@ export function newKart(at: { x: number; y: number; z: number; yaw: number }): K
     nx: 0, ny: 1, nz: 0, grounded: 0, offroad: 0,
     driftDir: 0, driftCharge: 0, driftHeld: 0, boostTime: 0, boostTier: 0, steer: 0,
     mana: MANA.start, manaRegenMul: 1, cd0: 0, cd1: 0, cd2: 0, cd3: 0, stunTime: 0, wardTime: 0,
+    offroadTime: 0, lastRoad: -1, rescue: 0,
   };
 }
 
@@ -89,6 +95,12 @@ const STUNNED: KartInput = { steer: 0, throttle: 0, drift: false };
 /** One fixed physics step. Returns the spell cast this step, if any. */
 export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT): Spell | null {
   const K = KART;
+  if (k.rescue > 0) { // being carried back: held still, no control; mana and cooldowns keep ticking
+    k.rescue = Math.max(0, k.rescue - dt);
+    k.vx = k.vy = k.vz = 0;
+    stepSpells(k, NO_CAST, dt);
+    return null;
+  }
   const stunned = k.stunTime > 0;
   k.stunTime = Math.max(0, k.stunTime - dt);
   const cast = stepSpells(k, stunned ? NO_CAST : input.cast ?? NO_CAST, dt);
@@ -205,13 +217,34 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
   k.nx = n.x; k.ny = n.y; k.nz = n.z;
   k.grounded = grounded ? 1 : 0;
 
-  if (k.y < K.killY) respawn(k, track);
+  // Rescue: too long on the grass, too far from the road, or fallen off the world.
+  if (grounded && !k.offroad) {
+    k.offroadTime = 0;
+    k.lastRoad = nearestIndex(track, k.x, k.z, k.y);
+  } else {
+    if (grounded) k.offroadTime += dt;
+    const s = nearestSample(track, k.x, k.z);
+    const far = (s.x - k.x) ** 2 + (s.z - k.z) ** 2 > (track.def.width / 2 + K.rescueDistance) ** 2;
+    if (k.offroadTime > K.rescueAfter || far || k.y < K.killY) rescue(k, track);
+  }
   return cast;
 }
 
+/** Carried back by the crows to where the kart left the road (so cutting across the grass gains nothing). */
+export function rescue(k: KartState, track: Track): void {
+  const at = k.lastRoad >= 0 ? k.lastRoad : nearestIndex(track, k.x, k.z, k.y);
+  placeAt(k, track.samples[at]);
+  k.lastRoad = at;
+  k.rescue = KART.rescueHold;
+}
+
 export function respawn(k: KartState, track: Track): void {
-  const s = nearestSample(track, k.x, k.z, k.y);
-  const { mana, manaRegenMul, cd0, cd1, cd2, cd3 } = k; // falling off doesn't refund or drain mana
+  placeAt(k, nearestSample(track, k.x, k.z, k.y));
+}
+
+/** A fresh kart just above sample `s`, facing along the track; mana and cooldowns carry over. */
+function placeAt(k: KartState, s: TrackSample) {
+  const { mana, manaRegenMul, cd0, cd1, cd2, cd3 } = k; // a respawn doesn't refund or drain mana
   Object.assign(k, newKart({ x: s.x, y: s.y + 1, z: s.z, yaw: s.yaw }), { mana, manaRegenMul, cd0, cd1, cd2, cd3 });
 }
 
