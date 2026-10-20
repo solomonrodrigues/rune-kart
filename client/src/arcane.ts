@@ -1,87 +1,7 @@
-// Arcane effects for karts: drift ribbons (Trail), glowing motes for the boost comet tail, and rune rings that burst off a boost.
-// Everything lives in world space so trails stay behind a moving kart. One draw call for all of a kart's motes.
+// Arcane effects for karts: drift ribbons (Trail), rune rings that burst off a boost (RuneBurst), and the rune
+// sigil at the exhaust (Sigil). Ribbons and rings live in world space so they stay behind a moving kart.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-
-/** A soft round dot; additive blending makes overlapping motes bloom together. */
-const DOT = (() => {
-  const c = document.createElement('canvas');
-  c.width = c.height = 32;
-  const g = c.getContext('2d')!, grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-  grad.addColorStop(0, '#fff'); grad.addColorStop(0.3, '#ffffffc0'); grad.addColorStop(1, '#fff0');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 32, 32);
-  return new THREE.CanvasTexture(c);
-})();
-
-/** A ring-buffer particle system: spawn motes with a colour and lifetime; they drift, swirl and fade out. */
-export class Motes {
-  readonly points: THREE.Points;
-  private pos: Float32Array;
-  private col: Float32Array;
-  private vel: Float32Array;
-  private base: Float32Array;  // spawn colour (faded towards 0 over life)
-  private life: Float32Array;
-  private maxLife: Float32Array;
-  private spin: Float32Array;  // swirl rate around the vertical axis through the spawn point
-  private origin: Float32Array;
-  private next = 0;
-
-  constructor(private capacity = 220) {
-    this.pos = new Float32Array(capacity * 3);
-    this.col = new Float32Array(capacity * 3);
-    this.vel = new Float32Array(capacity * 3);
-    this.base = new Float32Array(capacity * 3);
-    this.origin = new Float32Array(capacity * 3);
-    this.life = new Float32Array(capacity);
-    this.maxLife = new Float32Array(capacity).fill(1);
-    this.spin = new Float32Array(capacity);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
-    this.points = new THREE.Points(geo, new THREE.PointsMaterial({
-      size: 0.32, map: DOT, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
-    this.points.frustumCulled = false; // positions change every frame; not worth recomputing bounds
-  }
-
-  spawn(p: THREE.Vector3, v: THREE.Vector3, colour: THREE.Color, life: number, spin = 0) {
-    const i = this.next, o = i * 3;
-    this.next = (this.next + 1) % this.capacity;
-    this.pos[o] = this.origin[o] = p.x; this.pos[o + 1] = this.origin[o + 1] = p.y; this.pos[o + 2] = this.origin[o + 2] = p.z;
-    this.vel[o] = v.x; this.vel[o + 1] = v.y; this.vel[o + 2] = v.z;
-    this.base[o] = colour.r; this.base[o + 1] = colour.g; this.base[o + 2] = colour.b;
-    this.life[i] = this.maxLife[i] = life;
-    this.spin[i] = spin;
-  }
-
-  update(dt: number) {
-    for (let i = 0; i < this.capacity; i++) {
-      const o = i * 3;
-      if (this.life[i] <= 0) { this.col[o] = this.col[o + 1] = this.col[o + 2] = 0; continue; }
-      this.life[i] -= dt;
-      const t = Math.max(0, this.life[i] / this.maxLife[i]); // 1 → 0
-      // Swirl: rotate the horizontal velocity, so motes spiral as they rise.
-      const s = this.spin[i] * dt, c = Math.cos(s), sn = Math.sin(s);
-      const vx = this.vel[o], vz = this.vel[o + 2];
-      this.vel[o] = vx * c - vz * sn;
-      this.vel[o + 2] = vx * sn + vz * c;
-      const drag = Math.exp(-2.2 * dt);
-      this.vel[o] *= drag; this.vel[o + 2] *= drag;
-      this.vel[o + 1] = this.vel[o + 1] * drag + 0.8 * dt; // drift upwards
-      this.pos[o] += this.vel[o] * dt; this.pos[o + 1] += this.vel[o + 1] * dt; this.pos[o + 2] += this.vel[o + 2] * dt;
-      const fade = t * t * (3 - 2 * t);
-      this.col[o] = this.base[o] * fade; this.col[o + 1] = this.base[o + 1] * fade; this.col[o + 2] = this.base[o + 2] * fade;
-    }
-    this.points.geometry.attributes.position.needsUpdate = true;
-    this.points.geometry.attributes.color.needsUpdate = true;
-  }
-
-  dispose() {
-    this.points.geometry.dispose();
-    (this.points.material as THREE.Material).dispose();
-  }
-}
 
 /** Where the camera is, so wisp ribbons can turn to face it. Set once per frame by the game loop. */
 export const fxCamera = new THREE.Vector3();
@@ -284,7 +204,7 @@ export class Sigil {
     if (!this.group.visible) return;
     this.pop = Math.min(1, this.pop + dt / 0.18);
     const ease = 1 - (1 - this.pop) ** 3;
-    this.group.scale.setScalar(1.45 * (1.4 - 0.4 * ease)); // ~1.2 m across: readable from the chase camera
+    this.group.scale.setScalar(0.9 * (1.4 - 0.4 * ease)); // ~0.75 m across
     // Kept just under the bloom threshold (0.55), so the glyph reads crisply instead of blooming into a disc;
     // it flares past it for a moment as it appears.
     this.material.color.copy(colour).multiplyScalar(fade * (0.17 + 0.25 * (1 - ease)));
