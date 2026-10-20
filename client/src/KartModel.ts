@@ -12,6 +12,7 @@ const hdr = (hex: number, k: number) => new THREE.Color(hex).multiplyScalar(k);
 const TIER = [0, 0x4fc3ff, 0xff9d2e, 0xd65cff].map(c => hdr(c, 3));
 const HASTE = hdr(SPELLS.find(s => s.id === 'haste')!.color, 3);
 const TANK_R = 0.26;
+const WARD_WARN = 1.5; // seconds before a ward expires that it starts blinking
 const HEADLIGHT = 0xffe2b0;
 
 /** A faint cone of light from a lamp, brightest at the lamp and fading to nothing (vertex alpha). */
@@ -32,6 +33,7 @@ export class KartModel {
   private sparks: THREE.Mesh[] = [];
   private flame: THREE.Mesh;
   private ward: THREE.Mesh;
+  private wardBlink = 0;
   private driver = new Monkey();
   private banner = new THREE.Group();
   private flag!: THREE.BufferAttribute;   // flag vertex positions, rewritten each frame to make it wave
@@ -201,7 +203,15 @@ export class KartModel {
     this.slide += (-k.driftDir * 0.35 - this.slide) * (1 - Math.exp(-10 * dt));
     // Spun out: whirl the body until the stun wears off.
     this.body.rotation.y = this.slide + (k.stunTime > 0 ? k.stunTime * 14 : 0);
-    this.ward.visible = k.wardTime > 0;
+    // Ward: in its last WARD_WARN seconds it blinks, faster and faster, so everyone can see it's about to drop.
+    if (k.wardTime > 0 && k.wardTime < WARD_WARN) {
+      const urgency = 1 - k.wardTime / WARD_WARN;               // 0 → 1 as it runs out
+      this.wardBlink += dt * (4 + 12 * urgency);                // blinks per second, accumulated so it never jumps
+      this.ward.visible = Math.sin(this.wardBlink * Math.PI * 2) > -0.35; // mostly on, with short gaps
+    } else {
+      this.wardBlink = 0;
+      this.ward.visible = k.wardTime > 0;
+    }
     this.ward.rotation.y = time * 0.8;
 
     const speed = k.vx * Math.sin(k.yaw) + k.vz * Math.cos(k.yaw);
