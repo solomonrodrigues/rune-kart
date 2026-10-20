@@ -3,7 +3,7 @@ import type { TrackDef } from './track.ts';
 // A ~600 m loop: long straight, sweeping right-handers, a raised hairpin section and a crest to catch air.
 export const GREYBOX: TrackDef = {
   name: 'Greybox Loop',
-  width: 14,
+  width: 18,
   wallHeight: 1.5,
   samples: 240,
   points: [

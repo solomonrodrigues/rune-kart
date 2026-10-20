@@ -88,7 +88,8 @@ test('driving along the road edges never snags on the barrier or embankment', ()
   const snags: string[] = [];
   track.samples.forEach((s, i) => {
     if (i % 3) return;
-    for (const off of [-6.5, -5, 5, 6.5]) {
+    const h = GREYBOX.width / 2;
+    for (const off of [-(h - 0.5), -(h - 2), h - 2, h - 0.5]) {
       const k = newKart({ x: s.x - Math.cos(s.yaw) * off, y: s.y + 0.2, z: s.z + Math.sin(s.yaw) * off, yaw: s.yaw });
       drive(10, () => ({ steer: 0, throttle: 0, drift: false }), k);
       if (k.offroad) continue;
