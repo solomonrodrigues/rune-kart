@@ -5,11 +5,11 @@ import { newKart, stepKart, DT, type KartState } from './kart.ts';
 import { hasFinished, startProgress, updateProgress } from './race.ts';
 import { SPELLS } from './spells.ts';
 import { createTrack, spawnPoint } from './track.ts';
-import { GREYBOX } from './tracks.ts';
+import { GREYBOX, TRACKS } from './tracks.ts';
 
 const track = createTrack(GREYBOX);
 const seeded = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-const steady: BotProfile = { throttle: 1, lookahead: 4, driftThreshold: 0.5, aggression: 1 };
+const steady: BotProfile = { throttle: 1, lookahead: 4, apex: 0.8, driftThreshold: 0.5, aggression: 1 };
 
 test('a bot drives a clean lap, drifting for boosts', () => {
   const bot = new Bot(steady, seeded(1));
@@ -25,9 +25,28 @@ test('a bot drives a clean lap, drifting for boosts', () => {
     wasBoosting = k.boostTime > 0;
   }
   assert.ok(hasFinished(p, track, 1), 'should finish the lap');
-  assert.ok(ticks / 60 < 35, `lap took ${(ticks / 60).toFixed(1)}s`);
+  assert.ok(ticks / 60 < 22, `lap took ${(ticks / 60).toFixed(1)}s`); // ~19.8 s with the racing line
   assert.ok(offroad / ticks < 0.05, `offroad ${(100 * offroad / ticks).toFixed(1)}% of the lap`);
   assert.ok(boosts >= 1, 'should earn at least one drift boost');
+});
+
+test('on every track a bot keeps to the road at racing pace', () => {
+  // Lap-time bounds ~10% over what the racing line does, so a regression in the line or drifting shows up.
+  const bounds: Record<string, number> = { loop: 22, hollow: 54, serpent: 39 };
+  for (const [id, def] of Object.entries(TRACKS)) {
+    const t = createTrack(def), bot = new Bot(steady, seeded(1)), k = newKart(spawnPoint(t, 0));
+    k.mana = 0; k.manaRegenMul = 0;
+    const p = startProgress(t, k);
+    let ticks = 0, offroad = 0;
+    for (; ticks < 60 * 90 && !hasFinished(p, t, 1); ticks++) {
+      stepKart(k, bot.input(k, t, [], DT), t);
+      updateProgress(p, t, k);
+      offroad += k.offroad;
+    }
+    assert.ok(hasFinished(p, t, 1), `${id}: should finish`);
+    assert.ok(ticks / 60 < bounds[id], `${id}: lap took ${(ticks / 60).toFixed(1)}s`);
+    assert.ok(offroad / ticks < 0.01, `${id}: offroad ${(100 * offroad / ticks).toFixed(1)}%`);
+  }
 });
 
 test('a bot smites a kart ahead of it in range', () => {
