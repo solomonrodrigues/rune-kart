@@ -198,6 +198,38 @@ export class Sound {
   wallHit(force: number) { this.play('wall', { gain: Math.min(1, 0.25 + force * 0.06), rate: 0.9 + Math.random() * 0.2 }); }
   denied() { this.play('denied', { gain: 0.4, rate: 0.7 }); }
   hit() { this.play('hit', { gain: 0.9 }); this.thoom(0.6); }
+  /** The crows arrive to carry you back: two raspy caws over a flutter of wings. */
+  rescue() {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    for (const [delay, from, to] of [[0, 560, 380], [0.32, 500, 340]]) {
+      const o = ctx.createOscillator(), rasp = ctx.createOscillator(), raspDepth = ctx.createGain(), am = ctx.createGain();
+      const band = ctx.createBiquadFilter(), g = ctx.createGain(), at = t + delay;
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(from, at);
+      o.frequency.exponentialRampToValueAtTime(to, at + 0.22);
+      // A fast wobble in loudness gives the crow its rasp.
+      rasp.frequency.value = 55; raspDepth.gain.value = 0.2; am.gain.value = 0.8;
+      rasp.connect(raspDepth).connect(am.gain);
+      band.type = 'bandpass'; band.frequency.value = 1300; band.Q.value = 1.2;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.45, at + 0.02); // measured: ~3× the engine, so it carries over it
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.26);
+      o.connect(am).connect(band).connect(g).connect(this.master);
+      for (const osc of [o, rasp]) { osc.start(at); osc.stop(at + 0.3); }
+    }
+    // Wing beats: soft filtered noise pulsing about 14 times a second, fading out.
+    const n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), beat = ctx.createOscillator(), beatDepth = ctx.createGain(), am = ctx.createGain(), g = ctx.createGain();
+    n.buffer = this.noise; n.loop = true;
+    f.type = 'bandpass'; f.frequency.value = 600; f.Q.value = 0.8;
+    beat.frequency.value = 14; beatDepth.gain.value = 0.5; am.gain.value = 0.5;
+    beat.connect(beatDepth).connect(am.gain);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.12, t + 0.1);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    n.connect(f).connect(am).connect(g).connect(this.master);
+    n.start(t); beat.start(t); n.stop(t + 1.2); beat.stop(t + 1.2);
+  }
   spell(id: string) {
     switch (id) {
       case 'haste': this.play('chime', { gain: 0.35, rate: 2 }); break; // the boost plays too; this is the cast
