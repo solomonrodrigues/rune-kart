@@ -240,7 +240,10 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
 
 /** Carried back by the crows to where the kart left the road (so cutting across the grass gains nothing). */
 export function rescue(k: KartState, track: Track): void {
-  const at = k.lastRoad >= 0 ? k.lastRoad : nearestIndex(track, k.x, k.z, k.y);
+  let at = k.lastRoad >= 0 ? k.lastRoad : nearestIndex(track, k.x, k.z, k.y);
+  // Fell short of a jump: carried across to the landing, not back to the lip to fall in again.
+  const n = track.samples.length;
+  for (const { lip, landing } of track.jumps) if ((lip - at + n) % n <= 10) at = (landing + 2) % n;
   placeAt(k, track.samples[at]);
   k.lastRoad = at;
   k.rescue = KART.rescueHold;

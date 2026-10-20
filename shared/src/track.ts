@@ -19,6 +19,16 @@ export interface TrackDef {
    * ground, so another road can pass underneath. Leave unset for tracks that never cross themselves.
    */
   bridgeAbove?: number;
+  /**
+   * Stretches with a wall on both edges, as [from, to] control point indices: for roads that run through
+   * buildings (the scenery has no collision), so nobody drives off the road and through a wall.
+   */
+  walled?: [from: number, to: number][];
+  /**
+   * Jumps, as [lip, landing] control point indices: the road stops at the lip and starts again at the
+   * landing, with nothing between. Make the lip ramp up so karts at speed fly the gap.
+   */
+  jumps?: [lip: number, landing: number][];
 }
 
 export interface TrackSample { x: number; y: number; z: number; yaw: number }
@@ -34,10 +44,12 @@ export interface Track {
   groundBVH: MeshBVH;
   samples: TrackSample[]; // centreline, used for spawns and respawns
   bridges: number[];      // sample indices whose segment is a bridge (the client draws pillars under them)
+  jumps: { lip: number; landing: number }[]; // sample indices: no road from the lip to the landing
   outer: number;          // ±1: which side of the centreline (along the right vector) has the outer wall
 }
 
 export const GROUND_Y = -0.1;
+const FLARE = 1; // metres: how far the ends of railings and walls splay out from the road edge
 const UP = new Vector3(0, 1, 0);
 
 const yawOf = (t: Vector3) => Math.atan2(t.x, t.z);
@@ -66,6 +78,22 @@ export function createTrack(def: TrackDef): Track {
     samples.push({ x: c.x, y: c.y, z: c.z, yaw: yawOf(t) });
   }
 
+  // Walled stretches, as sample ranges: each control point maps to the sample nearest it.
+  const nearestTo = (k: number) => {
+    const [x, z, y] = def.points[k];
+    let best = 0, bestD = Infinity;
+    centres.forEach((c, i) => { const d = (c.x - x) ** 2 + (c.z - z) ** 2 + (c.y - Math.max(0, y)) ** 2; if (d < bestD) { bestD = d; best = i; } });
+    return best;
+  };
+  const walledRanges = (def.walled ?? []).map(([a, b]) => [nearestTo(a), nearestTo(b)] as const);
+  const jumps = (def.jumps ?? []).map(([a, b]) => ({ lip: nearestTo(a), landing: nearestTo(b) }));
+  const inGap = (k: number) => { const i = (k + n) % n; return jumps.some(({ lip, landing }) => (lip <= landing ? i >= lip && i < landing : i >= lip || i < landing)); };
+  const isWalled = (k: number) => { const i = (k + n) % n; return walledRanges.some(([a, b]) => (a <= b ? i >= a && i < b : i >= a || i < b)); };
+  const isBridge = (k: number) => {
+    const i = (k + n) % n;
+    return def.bridgeAbove !== undefined && Math.min(centres[i].y, centres[(i + 1) % n].y) >= def.bridgeAbove;
+  };
+
   const road: number[] = [], roadCol: number[] = [], walls: number[] = [], wallCol: number[] = [];
   const trim: number[] = [], trimCol: number[] = [];
   const bridges: number[] = [];
@@ -78,17 +106,20 @@ export function createTrack(def: TrackDef): Track {
     const L = (k: number) => centres[k].clone().addScaledVector(rights[k], -half);
     const R = (k: number) => centres[k].clone().addScaledVector(rights[k], half);
     // a=L_i b=R_i c=L_j d=R_j → right × tangent = up-facing triangles
+    if (inGap(i)) continue; // a jump's gap: no road, walls or trim
     quad(road, L(i), R(i), L(j), R(j));
     const stripe = Math.floor(i / 2) % 2;
     colour(roadCol, stripe ? [0.33, 0.31, 0.36] : [0.28, 0.27, 0.31], 6); // dark cobbles; stripes still show speed
 
-    const edge = (k: number, side: number) => centres[k].clone().addScaledVector(rights[k], side * half);
+    const edge = (k: number, side: number, flare = 0) => centres[k].clone().addScaledVector(rights[k], side * (half + flare));
     const at = (v: Vector3, y: number) => new Vector3(v.x, y, v.z);
-    if (def.bridgeAbove !== undefined && Math.min(centres[i].y, centres[j].y) >= def.bridgeAbove) {
+    // Where a railing or wall starts or ends, flare its end out by FLARE: a kart hugging the edge meets an
+    // angled face and slides along it, rather than hitting the end of it head-on.
+    if (isBridge(i)) {
       // Bridge: a railing each side (from just under the deck to wallHeight above it) and nothing down
       // to the ground, so the road below stays clear. A deck slab underneath is visual only.
       for (const side of [-1, 1]) {
-        const ei = edge(i, side), ej = edge(j, side);
+        const ei = edge(i, side, isBridge(i - 1) ? 0 : FLARE), ej = edge(j, side, isBridge(j) ? 0 : FLARE);
         quad(walls, at(ei, ei.y - 0.6), at(ej, ej.y - 0.6), at(ei, ei.y + def.wallHeight), at(ej, ej.y + def.wallHeight));
         colour(wallCol, stripe ? [0.4, 0.38, 0.44] : [0.47, 0.45, 0.51], 6);
         quad(trim, at(ei, ei.y - 0.9), at(ej, ej.y - 0.9), at(ei, ei.y - 0.6), at(ej, ej.y - 0.6)); // deck edge
@@ -104,13 +135,29 @@ export function createTrack(def: TrackDef): Track {
     const oi = edge(i, outer), oj = edge(j, outer);
     quad(walls, at(oi, GROUND_Y), at(oj, GROUND_Y), at(oi, oi.y + def.wallHeight), at(oj, oj.y + def.wallHeight));
     colour(wallCol, stripe ? [0.4, 0.38, 0.44] : [0.47, 0.45, 0.51], 6); // weathered stone blocks
-    // Inner embankment, kept 0.3 below road level so karts can drive off the edge without snagging it.
     const ii = edge(i, -outer), ij = edge(j, -outer);
+    if (isWalled(i)) { // a walled stretch: the inner edge gets a wall like the outer one
+      const wi = edge(i, -outer, isWalled(i - 1) ? 0 : FLARE), wj = edge(j, -outer, isWalled(j) ? 0 : FLARE);
+      quad(walls, at(wi, GROUND_Y), at(wj, GROUND_Y), at(wi, wi.y + def.wallHeight), at(wj, wj.y + def.wallHeight));
+      colour(wallCol, stripe ? [0.4, 0.38, 0.44] : [0.47, 0.45, 0.51], 6);
+      continue;
+    }
+    // Inner embankment, kept 0.3 below road level so karts can drive off the edge without snagging it.
     if (ii.y > 0.3 || ij.y > 0.3) {
       quad(walls, at(ii, GROUND_Y), at(ij, GROUND_Y), at(ii, Math.max(GROUND_Y, ii.y - 0.3)), at(ij, Math.max(GROUND_Y, ij.y - 0.3)));
       colour(wallCol, [0.33, 0.29, 0.3], 6);
       quad(trim, at(ii, Math.max(GROUND_Y, ii.y - 0.3)), at(ij, Math.max(GROUND_Y, ij.y - 0.3)), ii, ij);
       colour(trimCol, [0.33, 0.29, 0.3], 6);
+    }
+  }
+
+  // Each jump's lip and landing get a sheer face down to the ground (visual only).
+  for (const { lip, landing } of jumps) {
+    for (const k of [lip, landing]) {
+      const l = centres[k].clone().addScaledVector(rights[k], -half), r = centres[k].clone().addScaledVector(rights[k], half);
+      const lo = (v: Vector3) => new Vector3(v.x, GROUND_Y, v.z);
+      if (k === lip) quad(trim, lo(l), lo(r), l, r); else quad(trim, lo(r), lo(l), r, l); // face the gap
+      colour(trimCol, [0.26, 0.23, 0.27], 6);
     }
   }
 
@@ -123,7 +170,7 @@ export function createTrack(def: TrackDef): Track {
   };
   const roadGeo = geo(road, roadCol);
   const wallGeo = geo(walls, wallCol);
-  const groundGeo = new PlaneGeometry(800, 800).rotateX(-Math.PI / 2).translate(0, GROUND_Y, 0);
+  const groundGeo = new PlaneGeometry(1300, 1300).rotateX(-Math.PI / 2).translate(0, GROUND_Y, 0); // room for the biggest track's scenery
 
   return {
     def, road: roadGeo, walls: wallGeo, trim: geo(trim, trimCol), ground: groundGeo,
@@ -131,6 +178,7 @@ export function createTrack(def: TrackDef): Track {
     samples,
     outer,
     bridges,
+    jumps,
   };
 }
 
