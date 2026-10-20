@@ -32,7 +32,7 @@ test('a bot drives a clean lap, drifting for boosts', () => {
 
 test('on every track a bot keeps to the road at racing pace', () => {
   // Lap-time bounds ~10% over what the racing line does, so a regression in the line or drifting shows up.
-  const bounds: Record<string, number> = { loop: 22, hollow: 54, serpent: 39 };
+  const bounds: Record<string, number> = { loop: 22, hollow: 54, serpent: 39, citadel: 78 };
   for (const [id, def] of Object.entries(TRACKS)) {
     const t = createTrack(def), bot = new Bot(steady, seeded(1)), k = newKart(spawnPoint(t, 0));
     k.mana = 0; k.manaRegenMul = 0;

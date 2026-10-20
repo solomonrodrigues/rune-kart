@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Track } from 'shared/track';
-import { GREYBOX, HOLLOW, SERPENT } from 'shared/tracks';
+import { CITADEL, DREAD_SPIRE, GREYBOX, HOLLOW, SERPENT } from 'shared/tracks';
 import type { Reserved } from './dressing';
 
 const flat = (color: number, side: THREE.Side = THREE.FrontSide) => new THREE.MeshLambertMaterial({ color, flatShading: true, side });
@@ -182,6 +182,99 @@ function serpent(track: Track, run: number[]) {
   return { group: g, reserved };
 }
 
+// --- Dreadmoor Citadel: the castle the road runs through. Local frame: the road runs along +z from the
+// gatehouse (z = 0) to the rear gate (z = L) down x = 0, 26 m wide; the castle stands on the ground (y = 0). ---
+function castle(L: number) {
+  const stone: THREE.BufferGeometry[] = [], roof: THREE.BufferGeometry[] = [], violet: THREE.BufferGeometry[] = [];
+  const candle: THREE.BufferGeometry[] = [], iron: THREE.BufferGeometry[] = [], cloth: THREE.BufferGeometry[] = [];
+  const merlons = (x0: number, x1: number, z0: number, z1: number, y: number) => { // battlements along a wall top
+    const len = Math.hypot(x1 - x0, z1 - z0), count = Math.floor(len / 3.2);
+    for (let k = 0; k <= count; k++) {
+      const t = k / Math.max(1, count);
+      stone.push(box(1.5, 1.4, 1.5, x0 + (x1 - x0) * t, y + 0.7, z0 + (z1 - z0) * t));
+    }
+  };
+  // Gatehouses at each end: drum towers either side, a rampart over a 10 m-high passage, a raised portcullis.
+  const gate = (z: number) => {
+    for (const side of [-1, 1]) {
+      const x = side * 19.5;
+      stone.push(new THREE.CylinderGeometry(5, 5.6, 20, 12).translate(x, 10, z));
+      stone.push(new THREE.CylinderGeometry(5.9, 5.9, 1.2, 12).translate(x, 20.6, z));
+      roof.push(new THREE.ConeGeometry(5.7, 10, 12).translate(x, 26.2, z));
+      for (const wz of [-5.5, 5.5]) candle.push(box(1, 2.2, 0.4, x, 13, z + wz)); // arrow-slit windows, lit
+    }
+    stone.push(box(28, 6.5, 7, 0, 13.25, z)); // rampart: the passage underneath is 10 m clear
+    merlons(-14, 14, z - 3, z - 3, 16.5); merlons(-14, 14, z + 3, z + 3, 16.5);
+    for (let x = -12.6; x <= 12.6; x += 1.8) iron.push(box(0.3, 1.6, 0.3, x, 9.2, z - 2.6)); // portcullis teeth
+    for (const face of [-3.6, 3.6]) stone.push(strut(-14.5, 4, 0, 9.8, 1.3, z + face, 1.2), strut(0, 9.8, 14.5, 4, 1.3, z + face, 1.2)); // pointed arch
+  };
+  gate(0); gate(L);
+  // Curtain walls out to square corner towers, enclosing the courtyard.
+  const W = 44;
+  for (const z of [0, L]) for (const side of [-1, 1]) { stone.push(box(W - 25, 11, 3, side * (25 + (W - 25) / 2), 5.5, z)); merlons(side * 25, side * W, z, z, 11); }
+  for (const side of [-1, 1]) { stone.push(box(3, 11, L, side * W, 5.5, L / 2)); merlons(side * W, side * W, 0, L, 11); }
+  for (const x of [-W, W]) for (const z of [0, L]) {
+    stone.push(box(9, 17, 9, x, 8.5, z));
+    merlons(x - 4, x + 4, z - 4, z - 4, 17); merlons(x - 4, x + 4, z + 4, z + 4, 17);
+    candle.push(box(1, 2, 0.4, x, 12, z + (z ? -4.6 : 4.6)));
+  }
+  // The great hall over the road: walls with tall violet windows and buttresses, a pitched slate roof (its
+  // underside is the ceiling, 10.6 m up), chandeliers, wall torches and banners hung well above the karts.
+  const h0 = L * 0.36, h1 = L * 0.8, hl = h1 - h0;
+  for (const side of [-1, 1]) {
+    stone.push(box(1.6, 11, hl, side * 15.6, 5.5, h0 + hl / 2));
+    for (let z = h0 + 6; z < h1 - 3; z += 8) {
+      for (const face of [-0.9, 0.9]) violet.push(box(0.3, 5, 1.8, side * (15.6 + face), 6.5, z)); // the window, both faces
+      violet.push(box(0.32, 1.4, 0.5, side * 16.5, 9.6, z)); // its pointed head (a small pane)
+      stone.push(box(2.2, 9, 1.4, side * 17.4, 4.5, z + 4)); // buttress
+      // A torch on the inside between windows.
+      iron.push(box(0.4, 0.8, 0.4, side * 14.5, 5, z + 4));
+      candle.push(new THREE.ConeGeometry(0.35, 0.9, 6).translate(side * 14.5, 5.85, z + 4));
+    }
+  }
+  const gableShape = new THREE.Shape([new THREE.Vector2(-17.2, 10.6), new THREE.Vector2(17.2, 10.6), new THREE.Vector2(0, 18.5)]);
+  roof.push(new THREE.ExtrudeGeometry(gableShape, { depth: hl + 2, bevelEnabled: false }).translate(0, 0, h0 - 1));
+  for (let z = h0 + 10; z < h1 - 5; z += 14) { // chandeliers
+    iron.push(box(0.15, 2.6, 0.15, 0, 9.3, z), new THREE.TorusGeometry(2.2, 0.12, 4, 12).rotateX(Math.PI / 2).translate(0, 8, z));
+    for (let c = 0; c < 6; c++) { const a = (c / 6) * Math.PI * 2; candle.push(new THREE.ConeGeometry(0.16, 0.5, 5).translate(Math.cos(a) * 2.2, 8.4, z + Math.sin(a) * 2.2)); }
+  }
+  for (let z = h0 + 17; z < h1 - 5; z += 14) for (const side of [-1, 1]) cloth.push(box(2.6, 4.2, 0.12, side * 8, 8.3, z)); // banners from the beams
+  // The keep, in the courtyard beside the hall: tall, lit, and spired.
+  const kx = -32, kz = h0 + hl / 2;
+  stone.push(box(14, 34, 14, kx, 17, kz));
+  merlons(kx - 6.5, kx + 6.5, kz - 6.5, kz - 6.5, 34); merlons(kx - 6.5, kx + 6.5, kz + 6.5, kz + 6.5, 34);
+  roof.push(new THREE.ConeGeometry(6.5, 16, 4).rotateY(Math.PI / 4).translate(kx, 42, kz));
+  for (const y of [12, 20, 28]) for (const [dx, dz] of [[7.1, 0], [-7.1, 0], [0, 7.1], [0, -7.1]]) candle.push(box(dz ? 1.2 : 0.4, 2.4, dz ? 0.4 : 1.2, kx + dx, y, kz + dz));
+  // Knight statues flanking the road in the outer courtyard.
+  for (const z of [14, 30]) for (const side of [-1, 1]) {
+    const x = side * 19;
+    stone.push(box(3, 1.4, 3, x, 0.7, z), box(1.6, 3.2, 1.1, x, 3, z), new THREE.DodecahedronGeometry(0.6, 0).translate(x, 5.2, z));
+    stone.push(box(0.25, 3.8, 0.25, x - side * 0.9, 3.2, z - 0.8)); // the sword, point down
+  }
+  const g = assemble([
+    [merge(stone), flat(STONE)], [merge(roof), flat(0x1f1d26)], [merge(iron), flat(0x16141a)],
+    [merge(cloth), flat(0x4a0f17, THREE.DoubleSide)], [merge(violet), glow(0x8a64d8)], [merge(candle), glow(CANDLE)], // windows a touch under the runes' glow
+  ], 0, 0, 0);
+  return g;
+}
+
+// --- Dreadmoor Citadel: the Dread Spire, the jagged rock the spiral climbs round, ringed with runes ---
+function dreadSpire() {
+  const rock: THREE.BufferGeometry[] = [], runes: THREE.BufferGeometry[] = [], crystals: THREE.BufferGeometry[] = [];
+  let y = 0;
+  [[23, 10], [19, 10], [15.5, 9], [12, 9], [9, 8], [6.5, 8], [4, 7]].forEach(([r, h], k) => {
+    const lean = k * 0.6; // it twists and leans as it rises
+    rock.push(new THREE.CylinderGeometry(r * 0.78, r, h, 7).rotateY(k * 0.9).translate(Math.sin(lean) * 1.5, y + h / 2, Math.cos(lean) * 1.5));
+    if (k % 2 === 1) runes.push(new THREE.TorusGeometry(r * 0.82, 0.4, 4, 28).rotateX(Math.PI / 2).translate(Math.sin(lean) * 1.5, y + h * 0.5, Math.cos(lean) * 1.5));
+    y += h * 0.92;
+  });
+  rock.push(new THREE.ConeGeometry(3, 9, 6).translate(2.5, y + 4.5, 1));
+  for (let k = 0; k < 7; k++) { const a = (k / 7) * Math.PI * 2; crystals.push(new THREE.OctahedronGeometry(1.1, 0).scale(1, 2.2, 1).translate(Math.cos(a) * 7, y + 2 + (k % 3) * 2, Math.sin(a) * 7)); }
+  for (let k = 0; k < 9; k++) { const a = k * 0.7; rock.push(new THREE.DodecahedronGeometry(2.5 + (k % 3), 0).translate(Math.cos(a) * 24, 1, Math.sin(a) * 24)); } // boulders at its foot
+  const runeGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color(RUNE).multiplyScalar(1.6) }); // over-bright: it has to read from across the map
+  return assemble([[merge(rock), flat(0x34313b)], [merge(runes), runeGlow], [merge(crystals), glow(CRYSTAL)]], DREAD_SPIRE.x, DREAD_SPIRE.z, 0);
+}
+
 /** Where a spot (x, z) of radius r is clear of the road; true when clear. */
 type Clear = (x: number, z: number, r: number) => boolean;
 
@@ -262,6 +355,23 @@ export function buildLandmarks(track: Track, clear: Clear) {
       reserved.push(...s.reserved);
       break;
     }
+  }
+  if (track.def === CITADEL) {
+    objects.push(dreadSpire());
+    reserved.push({ x: DREAD_SPIRE.x, z: DREAD_SPIRE.z, r: DREAD_SPIRE.r - 12 });
+    // The castle spans its walled stretch: from the sample nearest the gatehouse's control point to the rear's.
+    const [from, to] = CITADEL.walled![0];
+    const near = (k: number) => {
+      const [x, z] = CITADEL.points[k];
+      return samples.reduce((b, s, i) => ((s.x - x) ** 2 + (s.z - z) ** 2 < (samples[b].x - x) ** 2 + (samples[b].z - z) ** 2 ? i : b), 0);
+    };
+    const a = samples[near(from)], b = samples[near(to)];
+    const L = Math.hypot(b.x - a.x, b.z - a.z), yaw = Math.atan2(b.x - a.x, b.z - a.z);
+    const c = castle(L);
+    c.position.set(a.x, 0, a.z);
+    c.rotation.y = yaw; // local +z runs down the road
+    objects.push(c);
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) reserved.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, r: 50 });
   }
   return { objects, reserved };
 }

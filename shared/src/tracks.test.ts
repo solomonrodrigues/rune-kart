@@ -53,42 +53,75 @@ for (const [id, def] of Object.entries(TRACKS)) {
   });
 }
 
-test('hollow: the crossover — karts stay on their own level, under and over the bridge', () => {
-  const track = createTrack(TRACKS.hollow);
+// Every crossing on a track that crosses itself: karts stay on their own level, under and over the bridge.
+for (const id of ['hollow', 'citadel']) {
+  const track = createTrack(TRACKS[id]);
   const S = track.samples, n = S.length;
-  // Find the crossing: a low sample with a bridge sample right above it.
-  let low = -1, high = -1;
-  for (let i = 0; i < n && low < 0; i++) {
-    if (S[i].y > 2) continue;
-    const j = S.findIndex(o => o.y > 10 && Math.hypot(o.x - S[i].x, o.z - S[i].z) < 6);
-    if (j >= 0) { low = i; high = j; }
+  // Find the crossings: a low sample with a bridge sample right above it (distinct ones, well apart).
+  const crossings: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    if (S[i].y > 2 || crossings.some(([l]) => Math.abs(l - i) < 60)) continue;
+    const j = S.findIndex(o => o.y > S[i].y + 8 && Math.hypot(o.x - S[i].x, o.z - S[i].z) < 6);
+    if (j >= 0) crossings.push([i, j]);
   }
-  assert.ok(low >= 0, 'no crossover found');
-  // Right at the crossing, both levels share (x, z): matching must go by height.
-  // Test from points on each road that are horizontally *closer to the other road's sample* — the case a
-  // flat (x, z) match gets wrong.
-  for (const [own, other] of [[low, high], [high, low]]) {
-    const a = S[own], b = S[other];
-    const x = a.x + (b.x - a.x) * 0.7, z = a.z + (b.z - a.z) * 0.7;
-    // (Bots, respawns and lap tracking all match through this, so the right level here is what matters.)
-    assert.ok(Math.abs(nearestSample(track, x, z, a.y).y - a.y) < 2, `near sample ${own}: matched the other level`);
-  }
-  for (const [idx, label] of [[low, 'under'], [high, 'over']] as const) {
-    // Start 40 samples back and drive through the crossing with the autopilot.
-    const s = S[(idx - 40 + n) % n];
-    const k = newKart({ x: s.x, y: s.y + 0.3, z: s.z, yaw: s.yaw });
-    const p = startProgress(track, k);
-    const startDist = p.dist;
-    let minY = Infinity, maxY = -Infinity, minV = Infinity;
-    for (let t = 0; t < 60 * 4; t++) {
-      stepKart(k, autopilot(track, k), track);
-      updateProgress(p, track, k);
-      if (t > 60) { minY = Math.min(minY, k.y); maxY = Math.max(maxY, k.y); minV = Math.min(minV, kartSpeed(k)); }
+  test(`${id}: has its crossings`, () => assert.ok(crossings.length >= (id === 'citadel' ? 2 : 1), `found ${crossings.length}`));
+  for (const [low, high] of crossings) test(`${id}: the crossover at ${low}/${high} — karts stay on their own level`, () => {
+    // Right at the crossing, both levels share (x, z): matching must go by height.
+    // Test from points on each road that are horizontally *closer to the other road's sample* — the case a
+    // flat (x, z) match gets wrong.
+    for (const [own, other] of [[low, high], [high, low]]) {
+      const a = S[own], b = S[other];
+      const x = a.x + (b.x - a.x) * 0.7, z = a.z + (b.z - a.z) * 0.7;
+      // (Bots, respawns and lap tracking all match through this, so the right level here is what matters.)
+      assert.ok(Math.abs(nearestSample(track, x, z, a.y).y - a.y) < 2, `near sample ${own}: matched the other level`);
     }
-    const level = S[idx].y;
-    assert.ok(Math.abs(minY - level) < 6 && Math.abs(maxY - level) < 6, `${label}: left its level (y ${minY.toFixed(1)}..${maxY.toFixed(1)}, crossing at ${level.toFixed(1)})`);
-    assert.ok(minV > 8, `${label}: snagged (speed fell to ${minV.toFixed(1)})`);
-    // From a standing start it covers ~25 samples in 4 s; a jump to the other level would be ~hundreds.
-    assert.ok(p.dist - startDist > 15 && p.dist - startDist < 80, `${label}: progress jumped (${(p.dist - startDist).toFixed(0)} samples)`);
+    for (const [idx, label] of [[low, 'under'], [high, 'over']] as const) {
+      // Start 40 samples back and drive through the crossing with the autopilot.
+      const s = S[(idx - 40 + n) % n];
+      const k = newKart({ x: s.x, y: s.y + 0.3, z: s.z, yaw: s.yaw });
+      const p = startProgress(track, k);
+      const startDist = p.dist;
+      let minY = Infinity, maxY = -Infinity, minV = Infinity;
+      for (let t = 0; t < 60 * 4; t++) {
+        stepKart(k, autopilot(track, k), track);
+        updateProgress(p, track, k);
+        if (t > 60) { minY = Math.min(minY, k.y); maxY = Math.max(maxY, k.y); minV = Math.min(minV, kartSpeed(k)); }
+      }
+      const level = S[idx].y;
+      assert.ok(Math.abs(minY - level) < 6 && Math.abs(maxY - level) < 6, `${label}: left its level (y ${minY.toFixed(1)}..${maxY.toFixed(1)}, crossing at ${level.toFixed(1)})`);
+      assert.ok(minV > 8, `${label}: snagged (speed fell to ${minV.toFixed(1)})`);
+      // From a standing start it covers ~25 samples in 4 s; a jump to the other level would be ~hundreds.
+      assert.ok(p.dist - startDist > 15 && p.dist - startDist < 80, `${label}: progress jumped (${(p.dist - startDist).toFixed(0)} samples)`);
+    }
+  });
+}
+
+// --- The Leap, on Dreadmoor Citadel ---
+const citadel = createTrack(TRACKS.citadel);
+const leap = citadel.jumps[0];
+
+test('citadel: at speed you fly the Leap and land on the road beyond it', () => {
+  const S = citadel.samples, n = S.length, st = S[(leap.lip - 25 + n) % n];
+  const k = newKart({ x: st.x, y: st.y + 0.3, z: st.z, yaw: st.yaw });
+  k.vx = Math.sin(st.yaw) * 22; k.vz = Math.cos(st.yaw) * 22;
+  let air = 0, landed = false;
+  for (let t = 0; t < 60 * 4; t++) {
+    stepKart(k, autopilot(citadel, k), citadel);
+    if (!k.grounded) air++;
+    else if (air > 10 && !k.offroad) landed = true;
+    assert.equal(k.rescue, 0, 'should not need rescuing');
   }
+  assert.ok(air / 60 > 0.3, `airtime ${(air / 60).toFixed(2)} s`);
+  assert.ok(landed, 'should land on the road');
+});
+
+test('citadel: fall short of the Leap and the crows carry you across, not back to fall again', () => {
+  const S = citadel.samples, n = S.length, st = S[(leap.lip - 1 + n) % n];
+  const k = newKart({ x: st.x, y: st.y + 0.3, z: st.z, yaw: st.yaw });
+  k.vx = Math.sin(st.yaw) * 3; k.vz = Math.cos(st.yaw) * 3; // creeping off the lip
+  let rescued = false;
+  for (let t = 0; t < 60 * 8 && !rescued; t++) { stepKart(k, { steer: 0, throttle: 0.2, drift: false }, citadel); rescued = k.rescue > 0; }
+  assert.ok(rescued, 'should be rescued');
+  const ahead = (k.lastRoad - leap.landing + n) % n;
+  assert.ok(ahead >= 0 && ahead < 5, `set down at ${k.lastRoad}, landing is ${leap.landing}`);
 });

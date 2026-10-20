@@ -14,8 +14,9 @@ moonlit corners for rune-fuelled boosts, and cast spells from a mana orb instead
   with a flame and a rune sigil to match.
 - **Spells, not items:** a mana orb refills as you race, faster while drifting and when you're behind. Spend it on
   four spells: Haste, Smite, Snare and Ward.
-- **Three tracks:** each with its own landmark, from a ruined watchtower to a cathedral beside a high viaduct and
-  a serpent's skeleton arching over the road.
+- **Four tracks:** each with its own landmark, from a ruined watchtower to a cathedral beside a high viaduct and
+  a serpent's skeleton arching over the road — and Dreadmoor Citadel, which spirals up a rune-lit spire, jumps a
+  gap and races straight through a castle's great hall.
 - **A living night:** braziers at every corner, drifting ground mist, crows, lightning behind the mountains, ghost
   wisps, graveyards and gibbets, and a blood moon that rises on the final lap.
 - **Crow rescue:** stray too far off the road and a flock of crows carries you back to where you left it.
@@ -87,7 +88,8 @@ behind.
 |---|---|
 | **Moonlit Loop** | A long straight, sweeping bends and a raised hairpin under the castle and its ruined watchtower |
 | **Hollow Crown** | The grand course: a figure-of-eight over a high viaduct beside a ruined cathedral, around a giant broken crown |
-| **Serpent's Pass** | The longest run: tight S-bends over a ridge and through a serpent's skeleton. Short, sharp drifts |
+| **Serpent's Pass** | Tight S-bends over a ridge and through a serpent's skeleton. Short, sharp drifts |
+| **Dreadmoor Citadel** | The most ambitious: a 540° spiral up the Dread Spire (passing over itself), a sky bridge over the start straight, through the castle's gatehouse, courtyard and roofed great hall, then a leap over a gap. Fall short and the crows carry you across |
 
 ## Development
 
