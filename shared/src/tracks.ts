@@ -14,16 +14,22 @@ export const GREYBOX: TrackDef = {
   ],
 };
 
-// A big, fast crown: long sweepers and a high bridge round the far end. Rewards holding drifts.
+// The grand course: a figure-of-eight over a high stone viaduct. It climbs out of the start into a
+// hairpin, crosses back over its own road on the bridge, drops into a second hairpin, then winds through
+// a hilly chicane in the west before the run home.
 export const HOLLOW: TrackDef = {
   name: 'Hollow Crown',
-  blurb: 'Fast, flowing sweepers and a high bridge. Hold your drifts.',
+  blurb: 'The grand course: a figure-of-eight over a high viaduct, two hairpins and a hilly chicane.',
   width: 26,
   wallHeight: 1.5,
-  samples: 280,
+  samples: 470,
+  bridgeAbove: 8,
   points: [
-    [0, 0, 0], [80, 0, 0], [140, 25, 1.5], [170, 80, 4], [150, 140, 7],
-    [90, 170, 8], [20, 160, 6], [-30, 120, 3], [-50, 60, 0], [-40, 15, 0],
+    [0, 0, 0], [70, -5, 0], [120, 20, 0], [150, 70, 0], [185, 115, 1],
+    [225, 140, 3], [255, 190, 6], [225, 240, 9], [165, 235, 11], [115, 190, 13],
+    [150, 70, 14], [190, 10, 12], [225, -40, 8], [195, -95, 4], [130, -100, 2],
+    [70, -75, 0], [10, -70, 0], [-55, -75, 0], [-95, -70, 1], [-112, -38, 3], [-106, 2, 5],
+    [-138, 45, 6], [-105, 88, 4], [-50, 60, 2], [-45, 15, 0],
   ],
 };
 

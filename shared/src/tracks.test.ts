@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { newKart, stepKart, kartSpeed } from './kart.ts';
 import { autopilot, hasFinished, lapOf, startProgress, updateProgress } from './race.ts';
-import { createTrack, spawnPoint } from './track.ts';
+import { createTrack, nearestSample, spawnPoint } from './track.ts';
 import { TRACKS } from './tracks.ts';
 
 for (const [id, def] of Object.entries(TRACKS)) {
@@ -52,3 +52,43 @@ for (const [id, def] of Object.entries(TRACKS)) {
     assert.deepEqual(snags, []);
   });
 }
+
+test('hollow: the crossover — karts stay on their own level, under and over the bridge', () => {
+  const track = createTrack(TRACKS.hollow);
+  const S = track.samples, n = S.length;
+  // Find the crossing: a low sample with a bridge sample right above it.
+  let low = -1, high = -1;
+  for (let i = 0; i < n && low < 0; i++) {
+    if (S[i].y > 2) continue;
+    const j = S.findIndex(o => o.y > 10 && Math.hypot(o.x - S[i].x, o.z - S[i].z) < 6);
+    if (j >= 0) { low = i; high = j; }
+  }
+  assert.ok(low >= 0, 'no crossover found');
+  // Right at the crossing, both levels share (x, z): matching must go by height.
+  // Test from points on each road that are horizontally *closer to the other road's sample* — the case a
+  // flat (x, z) match gets wrong.
+  for (const [own, other] of [[low, high], [high, low]]) {
+    const a = S[own], b = S[other];
+    const x = a.x + (b.x - a.x) * 0.7, z = a.z + (b.z - a.z) * 0.7;
+    // (Bots, respawns and lap tracking all match through this, so the right level here is what matters.)
+    assert.ok(Math.abs(nearestSample(track, x, z, a.y).y - a.y) < 2, `near sample ${own}: matched the other level`);
+  }
+  for (const [idx, label] of [[low, 'under'], [high, 'over']] as const) {
+    // Start 40 samples back and drive through the crossing with the autopilot.
+    const s = S[(idx - 40 + n) % n];
+    const k = newKart({ x: s.x, y: s.y + 0.3, z: s.z, yaw: s.yaw });
+    const p = startProgress(track, k);
+    const startDist = p.dist;
+    let minY = Infinity, maxY = -Infinity, minV = Infinity;
+    for (let t = 0; t < 60 * 4; t++) {
+      stepKart(k, autopilot(track, k), track);
+      updateProgress(p, track, k);
+      if (t > 60) { minY = Math.min(minY, k.y); maxY = Math.max(maxY, k.y); minV = Math.min(minV, kartSpeed(k)); }
+    }
+    const level = S[idx].y;
+    assert.ok(Math.abs(minY - level) < 6 && Math.abs(maxY - level) < 6, `${label}: left its level (y ${minY.toFixed(1)}..${maxY.toFixed(1)}, crossing at ${level.toFixed(1)})`);
+    assert.ok(minV > 8, `${label}: snagged (speed fell to ${minV.toFixed(1)})`);
+    // From a standing start it covers ~25 samples in 4 s; a jump to the other level would be ~hundreds.
+    assert.ok(p.dist - startDist > 15 && p.dist - startDist < 80, `${label}: progress jumped (${(p.dist - startDist).toFixed(0)} samples)`);
+  }
+});
