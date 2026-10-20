@@ -57,6 +57,8 @@ export class RaceState extends Schema {
 export type Phase = 'lobby' | 'countdown' | 'racing' | 'results';
 
 const IDLE_INPUT = { steer: 0, throttle: 0, drift: false };
+// Saturated colours that glow well on runes and banners against the dark world, one per grid slot.
+const KART_COLOURS = [0xd8343a, 0x2fbf6f, 0x3a72e0, 0xe8a32a, 0xa456e8, 0x28c4c0, 0xe8508f, 0xe9e0c4];
 const QUEUE_MAX = 20;     // ~330 ms of inputs; beyond that the oldest are dropped
 const MAX_IDLE_TICKS = 15; // after this long with no input, coast the kart (unacked) so it still slows down
 
@@ -103,7 +105,7 @@ export class RaceRoom extends Room<RaceState> {
     this.queues.set(client.sessionId, []);
     const kart = Object.assign(new Kart(), newKart(spawnPoint(this.track, slot)));
     kart.lap = 1;
-    kart.color = Math.floor(Math.random() * 0xffffff);
+    kart.color = KART_COLOURS[slot % KART_COLOURS.length];
     this.state.karts.set(client.sessionId, kart);
   }
 

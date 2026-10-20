@@ -31,30 +31,62 @@ export class KartModel {
   private flame: THREE.Mesh;
   private ward: THREE.Mesh;
   private driver = new Monkey();
+  private banner = new THREE.Group();
   private slide = 0;
   private wheelSpin = 0;
 
   /** `beams`: off for your own kart — seen from the chase camera they wash out the view, and it has a real spotlight. */
   constructor(color: number, beams = true) {
-    const paint = flat(color), dark = flat(0x222428);
-    const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
+    // A dark-fantasy war cart: wooden deck, iron armour and spikes, a ram with bone horns, spiked wheels,
+    // and the player's colour on its glowing runes and banner (so karts stay easy to tell apart).
+    // Albedos are kept fairly light: the world is lit by moonlight, so true-dark materials vanish.
+    const wood = flat(0x7a5638), iron = flat(0x5f6069), leather = flat(0x6b3428), bone = flat(0xece2c8);
+    const rune = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(2.5) });
+    const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = this.body) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, y, z);
       m.castShadow = true;
-      this.body.add(m);
+      parent.add(m);
       return m;
     };
-    add(new THREE.BoxGeometry(1.3, 0.35, 2.1), paint, 0, 0.45, 0);            // chassis
-    add(new THREE.BoxGeometry(0.9, 0.3, 0.7), paint, 0, 0.55, 0.85);          // nose
-    add(new THREE.BoxGeometry(1.5, 0.12, 0.4), dark, 0, 0.75, -1.05);         // rear wing
-    add(new THREE.BoxGeometry(0.6, 0.5, 0.5), dark, 0, 0.85, -0.3);           // seat
+    add(new THREE.BoxGeometry(1.2, 0.3, 2.0), wood, 0, 0.45, 0);                           // deck
+    add(new THREE.ConeGeometry(0.45, 0.8, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4), flat(0x45464e), 0, 0.5, 1.2); // ram
+    for (const side of [-1, 1]) {
+      add(new THREE.BoxGeometry(0.08, 0.42, 1.9), iron, side * 0.64, 0.48, 0);            // side armour
+      add(new THREE.BoxGeometry(0.02, 0.07, 1.3), rune, side * 0.69, 0.56, 0);            // rune strip
+      for (const z of [-0.6, 0, 0.6]) {
+        add(new THREE.ConeGeometry(0.06, 0.28, 4).rotateZ(-side * Math.PI / 2), iron, side * 0.8, 0.42, z); // spikes
+      }
+      // A bone horn curving out and up from each side of the ram.
+      const horn = new THREE.ConeGeometry(0.13, 0.75, 5).translate(0, 0.375, 0);
+      const hp = horn.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < hp.count; i++) {
+        const t = hp.getY(i) / 0.75;
+        hp.setXYZ(i, hp.getX(i) + side * 0.3 * t * t, hp.getY(i), hp.getZ(i) + 0.22 * t * t); // sweeps out, tip hooks forward
+      }
+      horn.computeVertexNormals();
+      add(horn, bone, side * 0.3, 0.62, 1.1).rotation.set(0.35, 0, -side * 0.45); // stands up, splayed outwards
+    }
+    add(new THREE.BoxGeometry(0.6, 0.15, 0.5), leather, 0, 0.68, -0.3);                  // seat
+    add(new THREE.BoxGeometry(0.66, 0.85, 0.16), leather, 0, 1.0, -0.66);               // high seat back
     this.driver.root.position.set(0, 0.75, -0.3);
     this.body.add(this.driver.root);
 
-    const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.3, 8).rotateZ(Math.PI / 2);
+    // Tattered banner in the player's colour on a pole at the back.
+    add(new THREE.CylinderGeometry(0.03, 0.03, 1.9, 4), iron, -0.42, 1.3, -0.92);
+    const flagShape = new THREE.Shape([[0, 0], [0.75, 0], [0.58, -0.32], [0.75, -0.68], [0, -0.68]].map(([x, y]) => new THREE.Vector2(x, y)));
+    this.banner.position.set(-0.42, 2.2, -0.92);
+    this.body.add(this.banner);
+    add(new THREE.ShapeGeometry(flagShape).rotateY(Math.PI / 2), new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide, flatShading: true }), 0, 0, 0, this.banner);
+
+    // Iron-rimmed wooden wheels with spiked hubs.
+    const rimGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 8).rotateZ(Math.PI / 2);
+    const hubGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.27, 6).rotateZ(Math.PI / 2);
     for (const [x, z, front] of [[0.75, 0.75, 1], [-0.75, 0.75, 1], [0.8, -0.7, 0], [-0.8, -0.7, 0]] as const) {
-      const w = add(wheelGeo, dark, x, 0.32, z);
+      const w = add(rimGeo, iron, x, 0.34, z);
       w.rotation.order = 'YXZ';
+      add(hubGeo, wood, 0, 0, 0, w);
+      add(new THREE.ConeGeometry(0.07, 0.3, 4).rotateZ(-Math.sign(x) * Math.PI / 2), iron, Math.sign(x) * 0.27, 0, 0, w);
       this.wheels.push(w);
       if (front) this.frontWheels.push(w);
     }
@@ -81,11 +113,15 @@ export class KartModel {
     const beamMat = new THREE.MeshBasicMaterial({
       vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
     });
-    for (const x of [-0.3, 0.3]) {
-      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.06, 6).rotateX(Math.PI / 2), lampMat);
-      lamp.position.set(x, 0.6, 1.21);
+    for (const x of [-0.42, 0.42]) {
+      // Iron lantern housings either side of the ram.
+      const housing = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.2), flat(0x5f6069));
+      housing.position.set(x, 0.66, 0.98);
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 6).rotateX(Math.PI / 2), lampMat);
+      lamp.position.set(x, 0.66, 1.1);
+      this.body.add(housing);
       const ray = new THREE.Mesh(beam(12, 1.7), beamMat);
-      ray.position.set(x, 0.6, 1.25);
+      ray.position.set(x, 0.66, 1.14);
       ray.rotation.set(0.07, x * 0.15, 0); // dipped slightly, splayed a touch outwards
       this.body.add(lamp);
       if (beams) this.body.add(ray);
@@ -126,6 +162,9 @@ export class KartModel {
     for (const w of this.wheels) w.rotation.x = this.wheelSpin;
     for (const w of this.frontWheels) w.rotation.y = -k.steer * 0.4;
     this.driver.update(k.steer);
+    // Banner streams back with speed and flutters.
+    const pace = Math.abs(speed);
+    this.banner.rotation.set(0, Math.sin(time * 9 + this.root.id) * 0.25 * Math.min(1, pace / 10 + 0.3), -Math.min(0.5, pace * 0.02));
 
     // Sparks only once a boost is banked: blue, orange, then purple.
     const tier = driftTier(k);
