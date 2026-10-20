@@ -22,6 +22,7 @@ export interface KartState {
   driftCharge: number;
   driftHeld: number;  // last tick's drift button, for edge detection
   boostTime: number;
+  boostTier: number;  // drift tier (1–3) behind the current boost, 0 for a Surge — colours the flame
   steer: number;      // smoothed steering actually applied (input eases in, so keyboards aren't twitchy)
   mana: number;
   manaRegenMul: number; // set by the server from race position (catch-up), 1 otherwise
@@ -54,7 +55,7 @@ export function newKart(at: { x: number; y: number; z: number; yaw: number }): K
   return {
     x: at.x, y: at.y, z: at.z, vx: 0, vy: 0, vz: 0, yaw: at.yaw,
     nx: 0, ny: 1, nz: 0, grounded: 0, offroad: 0,
-    driftDir: 0, driftCharge: 0, driftHeld: 0, boostTime: 0, steer: 0,
+    driftDir: 0, driftCharge: 0, driftHeld: 0, boostTime: 0, boostTier: 0, steer: 0,
     mana: MANA.start, manaRegenMul: 1, cd0: 0, cd1: 0, cd2: 0, cd3: 0, stunTime: 0, wardTime: 0,
   };
 }
@@ -128,7 +129,10 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
   }
   if (k.driftDir && (!input.drift || vF < K.driftMinSpeed * 0.5)) {
     const tier = driftTier(k);
-    if (tier && input.drift === false) k.boostTime = Math.max(k.boostTime, K.boostTimes[tier - 1]);
+    if (tier && input.drift === false) {
+      k.boostTime = Math.max(k.boostTime, K.boostTimes[tier - 1]);
+      k.boostTier = tier;
+    }
     k.driftDir = 0;
     k.driftCharge = 0;
     // Mid-drift the nose points into the corner; on release face where the kart is actually going,

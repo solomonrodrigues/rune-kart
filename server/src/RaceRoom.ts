@@ -20,6 +20,7 @@ export class Kart extends Schema implements KartState {
   @type('number') driftCharge = 0;
   @type('number') driftHeld = 0;
   @type('number') boostTime = 0;
+  @type('number') boostTier = 0;
   @type('number') steer = 0;
   @type('number') mana = 0;
   @type('number') manaRegenMul = 1;

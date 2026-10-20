@@ -43,6 +43,7 @@ test('surge boosts and ward blocks one hit', () => {
   k.mana = 100;
   stepKart(k, idle(slot('surge')), track);
   assert.ok(k.boostTime > 1);
+  assert.equal(k.boostTier, 0, 'a Surge boost is not a drift tier');
   stepKart(k, idle(slot('ward')), track);
   assert.ok(k.wardTime > 0);
   assert.equal(hitKart(k), 'warded');

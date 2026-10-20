@@ -53,7 +53,7 @@ export function stepSpells(k: KartState, cast: number, dt: number): Spell | null
   if (!spell || k.stunTime > 0 || k.mana < spell.cost || cooldownOf(k, cast) > 0) return null;
   k.mana -= spell.cost;
   k[cdKeys[cast]] = spell.cooldown;
-  if (spell.id === 'surge') k.boostTime = Math.max(k.boostTime, MANA.surgeBoost);
+  if (spell.id === 'surge') { k.boostTime = Math.max(k.boostTime, MANA.surgeBoost); k.boostTier = 0; }
   if (spell.id === 'ward') k.wardTime = MANA.wardTime;
   return spell;
 }

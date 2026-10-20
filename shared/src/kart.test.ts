@@ -47,9 +47,11 @@ test('holding a drift charges a tier and releasing it boosts', () => {
   k.vz = 20;
   drive(5, () => ({ steer: 0, throttle: 1, drift: false }), k);
   drive(100, () => ({ steer: 1, throttle: 1, drift: true }), k);
-  assert.ok(driftTier(k) >= 1, `charge=${k.driftCharge}`);
+  const tier = driftTier(k);
+  assert.ok(tier >= 1, `charge=${k.driftCharge}`);
   drive(1, () => gas, k);
   assert.ok(k.boostTime > 0);
+  assert.equal(k.boostTier, tier, 'the boost remembers its tier (it colours the flame)');
   assert.equal(k.driftDir, 0);
   Object.assign(KART, saved);
 });
