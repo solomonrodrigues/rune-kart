@@ -6,7 +6,7 @@
     <title>Rune Kart</title>
     <style>
       /* Dark fantasy HUD: old-book serif, bronze trim, parchment-gold text on dark panels. */
-      :root { --gold: #e9d6a0; --bronze: #8a6a3a; --bronze-hi: #c9a25e; --panel: #120c18e0; --serif: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; }
+      :root { --gold: #e9d6a0; --bronze: #8a6a3a; --iron: #4a4b53; --bronze-hi: #c9a25e; --panel: #120c18e0; --serif: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; }
       html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
       #hud { position: fixed; top: 10px; left: 12px; color: var(--gold); font: 15px var(--serif); letter-spacing: .03em; text-shadow: 0 1px 3px #000, 0 0 8px #000; }
       #hud small { color: #bfae86; font-size: 12px; }
@@ -22,7 +22,7 @@
       /* Mana orb: dark glass sphere in a bronze frame, glowing liquid that slowly churns, gloss on top. */
       #spells { position: fixed; left: 14px; bottom: 14px; display: flex; align-items: flex-end; gap: 12px; font: 12px var(--serif); color: var(--gold); pointer-events: none; }
       #spells .orb { position: relative; width: 104px; height: 104px; border-radius: 50%; overflow: hidden; background: #07050f;
-        border: 5px solid var(--bronze); box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 6px 16px #000a; }
+        border: 5px solid var(--iron); box-shadow: 0 0 0 2px #121117, 0 0 0 4px #6e6f78, inset 0 0 18px #000, 0 6px 16px #000a; }
       #spells .orb .liquid { position: absolute; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 40% 85%, var(--mana-hi, #6f8dff), var(--mana, #2441d6) 45%, var(--mana-lo, #0d1670) 90%); transition: height .15s linear; }
       /* Slow swirl of brighter and darker tones inside the liquid, like Diablo's churning orb. */
       #spells .orb .swirl { position: absolute; inset: 0; overflow: hidden; }
@@ -37,25 +37,44 @@
       #spells .orb.full { animation: orb-full 2.4s ease-in-out infinite; }
       #spells .orb.denied { animation: orb-shake .3s; }
       @keyframes orb-swirl { to { transform: rotate(360deg); } }
-      @keyframes orb-full { 50% { box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 0 14px var(--mana-glow, #4f6bff88); } }
+      @keyframes orb-full { 50% { box-shadow: 0 0 0 2px #121117, 0 0 0 4px #6e6f78, inset 0 0 18px #000, 0 0 14px var(--mana-glow, #4f6bff88); } }
       @keyframes orb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 
-      /* Spell slots: glyph, name, cost; glow in the spell's colour when castable; radial cooldown sweep. */
-      #spells .bar { display: flex; gap: 8px; padding: 7px; background: linear-gradient(#1a1220e6, #0b0710e6); border: 2px solid var(--bronze); border-radius: 6px; box-shadow: 0 0 0 1px #1c120a, 0 6px 16px #000a; }
-      #spells .slot { position: relative; width: 62px; height: 70px; border-radius: 5px; background: radial-gradient(circle at 50% 35%, #2a1f30, #120c16); border: 1px solid #8a6a3a99; text-align: center; overflow: hidden; transition: box-shadow .2s, border-color .2s; }
-      #spells .slot svg { display: block; width: 28px; height: 28px; margin: 9px auto 3px; fill: none; stroke: var(--c); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: .55; transition: opacity .2s, filter .2s; }
-      #spells .slot b { display: block; font-size: 11px; line-height: 1; font-variant: small-caps; letter-spacing: .05em; color: #cdbb8f; }
-      #spells .slot kbd { position: absolute; top: 3px; left: 5px; font: 700 10px var(--serif); color: var(--bronze-hi); }
-      #spells .slot .cost { position: absolute; top: 3px; right: 5px; font-size: 10px; color: #8fb0ff; }
-      #spells .slot .cost::before { content: '◆'; font-size: 7px; margin-right: 2px; vertical-align: 1px; }
-      #spells .slot.ready { border-color: var(--c); box-shadow: inset 0 0 12px color-mix(in srgb, var(--c) 35%, transparent), 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); }
-      #spells .slot.ready svg { opacity: 1; filter: drop-shadow(0 0 4px var(--c)); }
-      #spells .slot.ready b { color: var(--gold); }
-      #spells .slot.poor .cost { color: #ff6b6b; }
-      #spells .slot .cd { position: absolute; inset: 0; display: grid; place-items: center; background: conic-gradient(#000b calc(var(--cd, 0) * 360deg), transparent 0); font-size: 15px; font-weight: 700; color: #fff; text-shadow: 0 0 4px #000; }
-      #spells .slot.denied { animation: slot-denied .35s; }
-      @keyframes slot-denied { 0%, 60% { border-color: #ff4040; box-shadow: inset 0 0 16px #ff404088, 0 0 10px #ff4040aa; } }
-      @media (max-width: 560px) { #spells { gap: 8px; } #spells .orb { width: 76px; height: 76px; } #spells .slot { width: 50px; height: 60px; } #spells .slot svg { width: 22px; height: 22px; margin-top: 8px; } }
+      /* Spell bar: a carved stone plate in an iron rim, tucked under the orb like a Diablo action bar.
+         Each spell is a gothic-arched rune socket; castable spells glow up from the base in their colour. */
+      #spells .orb { z-index: 1; }
+      #spells .bar { position: relative; display: flex; gap: 12px; margin-left: -26px; padding: 12px 16px 6px 34px; border-radius: 4px 12px 12px 4px;
+        background-color: #1b1720;
+        background-image: radial-gradient(circle at 20% 30%, #ffffff0a 0 1.5px, transparent 2.5px), radial-gradient(circle at 70% 65%, #0000004d 0 2.5px, transparent 3.5px), linear-gradient(#2b2531, #15111a);
+        background-size: 23px 19px, 31px 27px, auto;
+        box-shadow: inset 0 1px 0 #ffffff14, inset 0 -3px 8px #000c, 0 0 0 2px #121117, 0 0 0 4px var(--iron), 0 0 0 5px #0b0a0e, 0 8px 18px #000b; }
+      /* Bronze diamond stud on the bar's end. */
+      #spells .bar::after { content: ''; position: absolute; right: -8px; top: 50%; width: 11px; height: 11px; transform: translateY(-50%) rotate(45deg);
+        background: linear-gradient(135deg, #e3c27c, #6b4c25); box-shadow: 0 0 0 2px #0b0a0e; }
+      #spells .spell { position: relative; display: flex; flex-direction: column; align-items: center; width: 58px; }
+      #spells .slot { position: relative; width: 50px; height: 58px; overflow: hidden; border-radius: 25px 25px 5px 5px / 22px 22px 5px 5px;
+        background: radial-gradient(ellipse at 50% 30%, #1d1722, #08060b);
+        box-shadow: inset 0 4px 9px #000, inset 0 -1px 0 #ffffff12, 0 0 0 2px #2a2830, 0 0 0 3px #57575f; }
+      /* The rune's glow, rising from the base of the socket. */
+      #spells .slot::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 115%, var(--c), transparent 68%); opacity: 0; transition: opacity .25s; }
+      #spells .slot svg { position: relative; display: block; width: 26px; height: 26px; margin: 15px auto 0; fill: none; stroke: var(--c); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: .3; filter: saturate(.4); transition: opacity .2s, filter .2s; }
+      #spells .slot .cd { position: absolute; inset: 0; display: grid; place-items: center; background: conic-gradient(#000c calc(var(--cd, 0) * 360deg), transparent 0); font-size: 14px; font-weight: 700; color: #e8dcc0; text-shadow: 0 0 4px #000; }
+      /* Bronze key plaque on the arch's crown, and a mana gem with the cost at its foot. */
+      #spells .spell kbd { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); padding: 0 5px; border-radius: 2px; font: 700 9px/13px var(--serif);
+        color: #1a1008; background: linear-gradient(#d9b46c, #7a5a2e); box-shadow: 0 0 0 1px #0b0a0e; z-index: 1; }
+      #spells .spell .cost { position: absolute; top: 47px; left: 50%; transform: translateX(-50%); width: 22px; height: 22px; display: grid; place-items: center; z-index: 1;
+        clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: radial-gradient(circle at 40% 35%, #b8c8ff, #2f4ed8 60%, #13207a); font: 700 9px var(--serif); color: #fff; text-shadow: 0 1px 1px #000; }
+      #spells .spell b { margin-top: 13px; font-size: 11px; line-height: 1; font-variant: small-caps; letter-spacing: .06em; color: #8f7f5c; text-shadow: 0 -1px 0 #000, 0 1px 0 #ffffff14; }
+      /* Ready: the socket lights in the spell's colour. */
+      #spells .spell.ready .slot { box-shadow: inset 0 4px 9px #000, 0 0 0 2px #2a2830, 0 0 0 3px var(--c), 0 0 10px color-mix(in srgb, var(--c) 45%, transparent); }
+      #spells .spell.ready .slot::before { opacity: .5; }
+      #spells .spell.ready svg { opacity: 1; filter: drop-shadow(0 0 4px var(--c)); }
+      #spells .spell.ready b { color: var(--gold); }
+      /* Can't afford it: the gem goes dark red. */
+      #spells .spell.poor .cost { background: radial-gradient(circle at 40% 35%, #ff9a9a, #9c1f1f 60%, #3a0808); }
+      #spells .spell.denied .slot { animation: slot-denied .35s; }
+      @keyframes slot-denied { 0%, 60% { box-shadow: inset 0 4px 9px #000, 0 0 0 2px #2a2830, 0 0 0 3px #ff4040, 0 0 14px #ff4040aa; } }
+      @media (max-width: 560px) { #spells { gap: 8px; } #spells .orb { width: 76px; height: 76px; } #spells .bar { gap: 6px; padding-right: 10px; } #spells .spell { width: 46px; } #spells .slot { width: 42px; height: 50px; } #spells .slot svg { width: 22px; height: 22px; margin-top: 12px; } #spells .spell .cost { top: 39px; } #spells .spell b { font-size: 10px; } }
     </style>
   </head>
   <body>

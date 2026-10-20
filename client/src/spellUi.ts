@@ -17,16 +17,16 @@ root.innerHTML =
   `<div class="liquid"><div class="swirl"></div><div class="wave"></div></div><div class="glass"></div><span></span></div>` +
   `<div class="bar">` +
   SPELLS.map((s, i) =>
-    `<div class="slot" style="--c:${hex(s.color)}" title="${s.name} — ${s.cost} mana">` +
-    `<kbd>${i + 1}</kbd>` +
-    `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[s.id]}</svg>` +
-    `<b>${s.name}</b><small class="cost">${s.cost}</small>` +
-    `<div class="cd"><span></span></div></div>`).join('') +
+    // A gothic-arched rune socket (glyph + cooldown), with the key plaque and mana-gem cost overhanging it,
+    // and the spell's name engraved below.
+    `<div class="spell" style="--c:${hex(s.color)}" title="${s.name} — ${s.cost} mana">` +
+    `<div class="slot"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[s.id]}</svg><div class="cd"><span></span></div></div>` +
+    `<kbd>${i + 1}</kbd><small class="cost">${s.cost}</small><b>${s.name}</b></div>`).join('') +
   `</div>`;
 const orb = root.querySelector<HTMLElement>('.orb')!;
 const liquid = root.querySelector<HTMLElement>('.liquid')!;
 const label = root.querySelector<HTMLElement>('.orb span')!;
-const slots = [...root.querySelectorAll<HTMLElement>('.slot')];
+const slots = [...root.querySelectorAll<HTMLElement>('.spell')];
 
 let last = '';
 export function renderSpells(k: KartState) {
