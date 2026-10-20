@@ -7,7 +7,7 @@ import { createTrack, spawnPoint } from 'shared/track';
 import { GREYBOX } from 'shared/tracks';
 import { KartModel } from './KartModel';
 import { EffectsView } from './effects';
-import { deniedCast, renderSpells } from './spellUi';
+import { deniedCast, renderSpells, setManaColour } from './spellUi';
 import { MANA, NO_CAST, SPELLS, spawnEffect, stepEffects, type Effect } from 'shared/spells';
 import { buildScene, MOON_DIR } from './scene';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -197,6 +197,7 @@ const local = predictor.state;
 const localPrev = copyKart(newKart(local), local); // state one step back, for render interpolation
 const localView = newKart(local); // scratch: the local kart as drawn
 const localModel = new KartModel(myColor, false);
+setManaColour(myColor); // your orb matches your kart's tank
 scene.add(localModel.root);
 // A real headlight for your own kart only: it lights walls and trees, and one fixed light keeps shaders cheap
 // (every kart still gets glowing lamps).

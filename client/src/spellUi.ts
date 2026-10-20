@@ -49,6 +49,16 @@ export function renderSpells(k: KartState) {
   });
 }
 
+/** Tint the orb's liquid to the player's kart colour. */
+export function setManaColour(hex: number) {
+  const rgb = [hex >> 16 & 255, hex >> 8 & 255, hex & 255];
+  const mix = (t: number, to: number) => `rgb(${rgb.map(c => Math.round(c + (to - c) * t)).join(',')})`;
+  orb.style.setProperty('--mana-hi', mix(0.4, 255));
+  orb.style.setProperty('--mana', mix(0, 0));
+  orb.style.setProperty('--mana-lo', mix(0.7, 0));
+  orb.style.setProperty('--mana-glow', `rgb(${rgb.join(',')} / .8)`);
+}
+
 /** A cast was refused (not enough mana, cooling down, or stunned): flash the slot and shake the orb. */
 export function deniedCast(slot: number) {
   for (const el of [slots[slot], slots[slot] && orb]) {

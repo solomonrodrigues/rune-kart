@@ -23,7 +23,7 @@
       #spells { position: fixed; left: 14px; bottom: 14px; display: flex; align-items: flex-end; gap: 12px; font: 12px var(--serif); color: var(--gold); pointer-events: none; }
       #spells .orb { position: relative; width: 104px; height: 104px; border-radius: 50%; overflow: hidden; background: #07050f;
         border: 5px solid var(--bronze); box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 6px 16px #000a; }
-      #spells .orb .liquid { position: absolute; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 40% 85%, #6f8dff, #2441d6 45%, #0d1670 90%); transition: height .15s linear; }
+      #spells .orb .liquid { position: absolute; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 40% 85%, var(--mana-hi, #6f8dff), var(--mana, #2441d6) 45%, var(--mana-lo, #0d1670) 90%); transition: height .15s linear; }
       /* Slow swirl of brighter and darker tones inside the liquid, like Diablo's churning orb. */
       #spells .orb .swirl { position: absolute; inset: 0; overflow: hidden; }
       #spells .orb .swirl::before, #spells .orb .swirl::after { content: ''; position: absolute; inset: -70%; mix-blend-mode: screen; }
@@ -37,7 +37,7 @@
       #spells .orb.full { animation: orb-full 1.6s ease-in-out infinite; }
       #spells .orb.denied { animation: orb-shake .3s; }
       @keyframes orb-swirl { to { transform: rotate(360deg); } }
-      @keyframes orb-full { 50% { box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 0 26px #4f6bffcc; } }
+      @keyframes orb-full { 50% { box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 0 26px var(--mana-glow, #4f6bffcc); } }
       @keyframes orb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 
       /* Spell slots: glyph, name, cost; glow in the spell's colour when castable; radial cooldown sweep. */

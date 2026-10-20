@@ -12,8 +12,6 @@ const hdr = (hex: number, k: number) => new THREE.Color(hex).multiplyScalar(k);
 const TIER = [0, 0x4fc3ff, 0xff9d2e, 0xd65cff].map(c => hdr(c, 3));
 const HASTE = hdr(SPELLS.find(s => s.id === 'haste')!.color, 3);
 const TANK_R = 0.26;
-const MANA_GLOW = hdr(0x3a5cff, 1.7);  // over-bright so the tank glows (bloom)
-const MANA_FULL = hdr(0x7f9bff, 2.0);
 const HEADLIGHT = 0xffe2b0;
 
 /** A faint cone of light from a lamp, brightest at the lamp and fading to nothing (vertex alpha). */
@@ -40,7 +38,10 @@ export class KartModel {
   // and stays level however the kart tilts.
   private tank = new THREE.Group();
   private surface = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0); // keeps what's below the surface
-  private liquidMat = new THREE.MeshBasicMaterial({ color: MANA_GLOW.clone(), side: THREE.DoubleSide, clippingPlanes: [this.surface] });
+  private liquidMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, clippingPlanes: [this.surface] });
+  // The kart's own colour, over-bright so the tank glows (bloom); paler and brighter when full.
+  private manaGlow = new THREE.Color();
+  private manaFull = new THREE.Color();
   private tankPos = new THREE.Vector3();
   private slide = 0;
   private wheelSpin = 0;
@@ -145,6 +146,9 @@ export class KartModel {
     this.ward.visible = false;
 
     // Glass mana tank in an iron cage behind the seat, where the chase camera can see it.
+    this.manaGlow.copy(hdr(color, 1.7));
+    this.manaFull.set(color).lerp(new THREE.Color(0xffffff), 0.3).multiplyScalar(2.0);
+    this.liquidMat.color.copy(this.manaGlow);
     const tankIron = flat(0x5f6069);
     this.tank.position.set(0, 0.98, -1.0);
     const liquid = new THREE.Mesh(new THREE.SphereGeometry(TANK_R, 12, 8), this.liquidMat);
@@ -216,8 +220,8 @@ export class KartModel {
     this.tank.getWorldPosition(this.tankPos);
     const level = Math.min(1, Math.max(0, k.mana / MANA.max));
     this.surface.constant = this.tankPos.y - TANK_R + level * 2 * TANK_R + (level >= 1 ? 0.05 : 0);
-    if (level >= 1) this.liquidMat.color.copy(MANA_FULL).multiplyScalar(1 + 0.1 * Math.sin(time * 4)); // full: brighter, pulsing
-    else this.liquidMat.color.copy(MANA_GLOW);
+    if (level >= 1) this.liquidMat.color.copy(this.manaFull).multiplyScalar(1 + 0.1 * Math.sin(time * 4)); // full: brighter, pulsing
+    else this.liquidMat.color.copy(this.manaGlow);
   }
 
   dispose() {
