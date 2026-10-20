@@ -39,7 +39,7 @@ export class Kart extends Schema implements KartState {
 
 export class SpellEffect extends Schema implements Effect {
   @type('number') id = 0;
-  @type('string') kind: Effect['kind'] = 'bolt';
+  @type('string') kind: Effect['kind'] = 'smite';
   @type('string') owner = '';
   @type('number') x = 0; @type('number') y = 0; @type('number') z = 0;
   @type('number') vx = 0; @type('number') vz = 0;
@@ -146,10 +146,10 @@ export class RaceRoom extends Room<RaceState> {
   private cast(owner: string, kart: Kart, spell: Spell) {
     const e = spawnEffect(this.nextEffectId++, spell, owner, kart);
     if (!e) return; // self-only spells already applied in the kart step
-    if (e.kind === 'rune') {
+    if (e.kind === 'snare') {
       // Cap each kart's live traps; the oldest goes first.
-      const mine = [...this.state.effects.values()].filter(f => f.kind === 'rune' && f.owner === owner);
-      if (mine.length >= MANA.rune.maxPerKart) this.state.effects.delete(String(mine[0].id));
+      const mine = [...this.state.effects.values()].filter(f => f.kind === 'snare' && f.owner === owner);
+      if (mine.length >= MANA.snare.maxPerKart) this.state.effects.delete(String(mine[0].id));
     }
     this.state.effects.set(String(e.id), Object.assign(new SpellEffect(), e));
   }

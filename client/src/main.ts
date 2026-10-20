@@ -180,7 +180,7 @@ if (!OFFLINE) {
 }
 
 const predictor = new Predictor(start, track);
-// Offline there's no server, so bolts and runes are simulated here (you can trip your own runes).
+// Offline there's no server, so smites and snares are simulated here (you can trip your own snares).
 const offlineFx: Effect[] = [];
 let offlineFxId = 1;
 const local = predictor.state;

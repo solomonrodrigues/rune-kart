@@ -29,19 +29,19 @@ test('mana regenerates up to the cap, faster with the catch-up multiplier', () =
 test('casting spends mana and starts the cooldown; no mana or cooldown means no cast', () => {
   const k = settled();
   k.mana = 100;
-  const bolt = slot('bolt');
-  assert.equal(stepKart(k, idle(bolt), track)?.id, 'bolt');
-  assert.ok(Math.abs(k.mana - (100 - SPELLS[bolt].cost)) < 0.5);
-  assert.ok(cooldownOf(k, bolt) > 0);
-  assert.equal(stepKart(k, idle(bolt), track), null, 'blocked by cooldown');
+  const smite = slot('smite');
+  assert.equal(stepKart(k, idle(smite), track)?.id, 'smite');
+  assert.ok(Math.abs(k.mana - (100 - SPELLS[smite].cost)) < 0.5);
+  assert.ok(cooldownOf(k, smite) > 0);
+  assert.equal(stepKart(k, idle(smite), track), null, 'blocked by cooldown');
   k.mana = 5;
-  assert.equal(stepKart(k, idle(slot('surge')), track), null, 'blocked by mana');
+  assert.equal(stepKart(k, idle(slot('haste')), track), null, 'blocked by mana');
 });
 
-test('surge boosts and ward blocks one hit', () => {
+test('haste boosts and ward blocks one hit', () => {
   const k = settled();
   k.mana = 100;
-  stepKart(k, idle(slot('surge')), track);
+  stepKart(k, idle(slot('haste')), track);
   assert.ok(k.boostTime > 1);
   assert.equal(k.boostTier, 0, 'a Haste boost is not a drift tier');
   stepKart(k, idle(slot('ward')), track);
@@ -70,30 +70,30 @@ const kartAhead = (from: KartState, metres: number) => {
   return k;
 };
 
-test('an arcane bolt flies forward and stuns the kart ahead, not its caster', () => {
+test('a smite flies forward and stuns the kart ahead, not its caster', () => {
   const caster = settled(), target = kartAhead(caster, 25);
-  const e = spawnEffect(1, SPELLS[slot('bolt')], 'me', caster)!;
+  const e = spawnEffect(1, SPELLS[slot('smite')], 'me', caster)!;
   const effects: Effect[] = [e];
   const karts: [string, KartState][] = [['me', caster], ['them', target]];
   let dead = new Set<Effect>();
   for (let i = 0; i < 60 && !dead.size; i++) dead = stepEffects(effects, karts, track, 1 / 60);
-  assert.ok(dead.has(e), 'bolt should be used up');
+  assert.ok(dead.has(e), 'smite should be used up');
   assert.ok(target.stunTime > 0, 'target stunned');
   assert.equal(caster.stunTime, 0, 'caster unharmed');
 });
 
-test('a bolt that misses dies on the wall or expires', () => {
+test('a smite that misses dies on the wall or expires', () => {
   const caster = settled();
   caster.yaw += Math.PI / 2; // aim across the track at a wall or off the edge
-  const e = spawnEffect(1, SPELLS[slot('bolt')], 'me', caster)!;
+  const e = spawnEffect(1, SPELLS[slot('smite')], 'me', caster)!;
   let dead = new Set<Effect>();
-  for (let i = 0; i < 60 * MANA.bolt.life + 2 && !dead.size; i++) dead = stepEffects([e], [['me', caster]], track, 1 / 60);
+  for (let i = 0; i < 60 * MANA.smite.life + 2 && !dead.size; i++) dead = stepEffects([e], [['me', caster]], track, 1 / 60);
   assert.ok(dead.has(e));
 });
 
-test('a rune trap arms, then stuns whoever drives over it', () => {
+test('a snare arms, then stuns whoever drives over it', () => {
   const caster = settled();
-  const e = spawnEffect(1, SPELLS[slot('rune')], 'me', caster)!;
+  const e = spawnEffect(1, SPELLS[slot('snare')], 'me', caster)!;
   const victim = newKart({ x: e.x, y: e.y, z: e.z, yaw: 0 });
   let dead = stepEffects([e], [['them', victim]], track, 1 / 60);
   assert.equal(dead.size, 0, 'not armed yet');

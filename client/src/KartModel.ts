@@ -9,7 +9,7 @@ const flat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShadi
 const hdr = (hex: number, k: number) => new THREE.Color(hex).multiplyScalar(k);
 /** Spark and boost-flame colour per drift tier: 1 blue, 2 orange, 3 purple (index 0 unused). */
 const TIER = [0, 0x4fc3ff, 0xff9d2e, 0xd65cff].map(c => hdr(c, 3));
-const SURGE = hdr(SPELLS.find(s => s.id === 'surge')!.color, 3);
+const HASTE = hdr(SPELLS.find(s => s.id === 'haste')!.color, 3);
 const HEADLIGHT = 0xffe2b0;
 
 /** A faint cone of light from a lamp, brightest at the lamp and fading to nothing (vertex alpha). */
@@ -102,7 +102,7 @@ export class KartModel {
 
     this.flame = new THREE.Mesh(
       new THREE.ConeGeometry(0.22, 1, 6).rotateX(-Math.PI / 2).translate(0, 0, -0.5),
-      new THREE.MeshBasicMaterial({ color: SURGE.clone(), transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: HASTE.clone(), transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
     this.flame.position.set(0, 0.5, -1.15);
     this.body.add(this.flame);
@@ -177,7 +177,7 @@ export class KartModel {
     const boost = Math.min(1, k.boostTime / KART.boostTimes[0]);
     this.flame.visible = boost > 0;
     // The flame burns the colour of the sparks it was released on (Haste has its own).
-    (this.flame.material as THREE.MeshBasicMaterial).color.copy(k.boostTier ? TIER[k.boostTier] : SURGE);
+    (this.flame.material as THREE.MeshBasicMaterial).color.copy(k.boostTier ? TIER[k.boostTier] : HASTE);
     this.flame.scale.set(1, 1, boost * (0.8 + 0.4 * Math.abs(Math.sin(time * 30))));
   }
 

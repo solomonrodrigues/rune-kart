@@ -4,9 +4,9 @@ import { MANA, SPELLS, cooldownOf, type Spell } from 'shared/spells';
 
 // Simple glyphs, stroked in the spell's colour.
 const ICONS: Record<Spell['id'], string> = {
-  surge: '<path d="M3 6l6 6-6 6M10 6l6 6-6 6M17 7l4 5-4 5"/>',
-  bolt: '<path d="M14 2L5 13h6l-2 9 10-12h-6l1-8z"/><circle cx="12" cy="12" r="10.5" opacity=".35"/>',
-  rune: '<circle cx="12" cy="12" r="9"/><path d="M12 4.5l6.5 11.5h-13z"/><path d="M12 9v4M12 15.5v.5"/>',
+  haste: '<path d="M3 6l6 6-6 6M10 6l6 6-6 6M17 7l4 5-4 5"/>',
+  smite: '<path d="M14 2L5 13h6l-2 9 10-12h-6l1-8z"/><circle cx="12" cy="12" r="10.5" opacity=".35"/>',
+  snare: '<circle cx="12" cy="12" r="9"/><path d="M12 4.5l6.5 11.5h-13z"/><path d="M12 9v4M12 15.5v.5"/>',
   ward: '<path d="M12 2.5l8 3v6c0 5-3.6 8.6-8 10-4.4-1.4-8-5-8-10v-6z"/><path d="M12 7v10M8.5 10.5h7"/>',
 };
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;

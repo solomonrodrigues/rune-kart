@@ -7,7 +7,7 @@ import type { Track } from './track.ts';
 export type SpellKind = 'self' | 'projectile' | 'dropped';
 
 export interface Spell {
-  id: 'surge' | 'bolt' | 'rune' | 'ward';
+  id: 'haste' | 'smite' | 'snare' | 'ward';
   name: string;
   cost: number;
   cooldown: number; // seconds
@@ -17,9 +17,9 @@ export interface Spell {
 
 // Balancing happens here. The order is the loadout: keys 1–4.
 export const SPELLS: Spell[] = [
-  { id: 'surge', name: 'Haste', cost: 30, cooldown: 1.5, kind: 'self', color: 0x4fc3ff },
-  { id: 'bolt', name: 'Smite', cost: 40, cooldown: 1.0, kind: 'projectile', color: 0xd65cff },
-  { id: 'rune', name: 'Snare', cost: 35, cooldown: 2.0, kind: 'dropped', color: 0xff9d2e },
+  { id: 'haste', name: 'Haste', cost: 30, cooldown: 1.5, kind: 'self', color: 0x4fc3ff },
+  { id: 'smite', name: 'Smite', cost: 40, cooldown: 1.0, kind: 'projectile', color: 0xd65cff },
+  { id: 'snare', name: 'Snare', cost: 35, cooldown: 2.0, kind: 'dropped', color: 0xff9d2e },
   { id: 'ward', name: 'Ward', cost: 45, cooldown: 4.0, kind: 'self', color: 0x7dffb0 },
 ];
 
@@ -29,11 +29,11 @@ export const MANA = {
   regen: 8,          // per second → empty to full in 12.5 s
   driftRegen: 3,     // extra per second while drifting, rewarding skill
   catchUp: 0.5,      // last place regenerates this much faster than first (server sets the multiplier)
-  surgeBoost: 1.2,   // seconds of boost
+  hasteBoost: 1.2,   // seconds of boost
   wardTime: 6,       // seconds a ward lasts unless it blocks a hit first
   stunTime: 1.0,     // seconds spun out when hit
-  bolt: { speed: 55, life: 2.0, radius: 1.3, height: 0.6 },
-  rune: { life: 20, radius: 1.6, arm: 0.6, behind: 3, maxPerKart: 3 },
+  smite: { speed: 55, life: 2.0, radius: 1.3, height: 0.6 },
+  snare: { life: 20, radius: 1.6, arm: 0.6, behind: 3, maxPerKart: 3 },
 };
 
 export const NO_CAST = -1;
@@ -53,7 +53,7 @@ export function stepSpells(k: KartState, cast: number, dt: number): Spell | null
   if (!spell || k.stunTime > 0 || k.mana < spell.cost || cooldownOf(k, cast) > 0) return null;
   k.mana -= spell.cost;
   k[cdKeys[cast]] = spell.cooldown;
-  if (spell.id === 'surge') { k.boostTime = Math.max(k.boostTime, MANA.surgeBoost); k.boostTier = 0; }
+  if (spell.id === 'haste') { k.boostTime = Math.max(k.boostTime, MANA.hasteBoost); k.boostTier = 0; }
   if (spell.id === 'ward') k.wardTime = MANA.wardTime;
   return spell;
 }
@@ -62,7 +62,7 @@ export function stepSpells(k: KartState, cast: number, dt: number): Spell | null
 
 export interface Effect {
   id: number;
-  kind: 'bolt' | 'rune';
+  kind: 'smite' | 'snare';
   owner: string;
   x: number; y: number; z: number;
   vx: number; vz: number;
@@ -71,13 +71,13 @@ export interface Effect {
 
 export function spawnEffect(id: number, spell: Spell, owner: string, k: KartState): Effect | null {
   const fx = Math.sin(k.yaw), fz = Math.cos(k.yaw);
-  if (spell.id === 'bolt') {
-    const speed = Math.max(0, k.vx * fx + k.vz * fz) + MANA.bolt.speed;
-    return { id, kind: 'bolt', owner, x: k.x + fx * 2, y: k.y + MANA.bolt.height, z: k.z + fz * 2, vx: fx * speed, vz: fz * speed, age: 0 };
+  if (spell.id === 'smite') {
+    const speed = Math.max(0, k.vx * fx + k.vz * fz) + MANA.smite.speed;
+    return { id, kind: 'smite', owner, x: k.x + fx * 2, y: k.y + MANA.smite.height, z: k.z + fz * 2, vx: fx * speed, vz: fz * speed, age: 0 };
   }
-  if (spell.id === 'rune') {
-    const b = MANA.rune.behind;
-    return { id, kind: 'rune', owner, x: k.x - fx * b, y: k.y, z: k.z - fz * b, vx: 0, vz: 0, age: 0 };
+  if (spell.id === 'snare') {
+    const b = MANA.snare.behind;
+    return { id, kind: 'snare', owner, x: k.x - fx * b, y: k.y, z: k.z - fz * b, vx: 0, vz: 0, age: 0 };
   }
   return null;
 }
@@ -103,20 +103,20 @@ export function stepEffects(effects: Effect[], karts: [string, KartState][], tra
   const dead = new Set<Effect>();
   for (const e of effects) {
     e.age += dt;
-    if (e.kind === 'bolt') {
+    if (e.kind === 'smite') {
       e.x += e.vx * dt; e.z += e.vz * dt;
-      // Hug the road so bolts follow ramps; die over a drop or into a wall.
+      // Hug the road so smites follow ramps; die over a drop or into a wall.
       ray.origin.set(e.x, e.y + 3, e.z);
       const ground = track.roadBVH.raycastFirst(ray, DoubleSide, 0, 8) ?? track.groundBVH.raycastFirst(ray, DoubleSide, 0, 8);
-      if (!ground || e.age > MANA.bolt.life) { dead.add(e); continue; }
-      e.y = ground.point.y + MANA.bolt.height;
+      if (!ground || e.age > MANA.smite.life) { dead.add(e); continue; }
+      e.y = ground.point.y + MANA.smite.height;
       const wall = track.wallBVH.closestPointToPoint(centre.set(e.x, e.y, e.z), undefined, 0, 0.4);
       if (wall && wall.distance < 0.4) { dead.add(e); continue; }
-    } else if (e.age > MANA.rune.life) { dead.add(e); continue; }
+    } else if (e.age > MANA.snare.life) { dead.add(e); continue; }
 
-    const radius = e.kind === 'bolt' ? MANA.bolt.radius : MANA.rune.radius;
-    const ownerImmune = e.kind === 'bolt' ? 0.3 : MANA.rune.arm;
-    if (e.kind === 'rune' && e.age < MANA.rune.arm * 0.5) continue; // still settling
+    const radius = e.kind === 'smite' ? MANA.smite.radius : MANA.snare.radius;
+    const ownerImmune = e.kind === 'smite' ? 0.3 : MANA.snare.arm;
+    if (e.kind === 'snare' && e.age < MANA.snare.arm * 0.5) continue; // still settling
     for (const [id, k] of karts) {
       if (id === e.owner && e.age < ownerImmune) continue;
       if (Math.abs(k.y + 0.5 - e.y) > 2 || (k.x - e.x) ** 2 + (k.z - e.z) ** 2 > radius * radius) continue;

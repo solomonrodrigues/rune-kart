@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { SPELLS, type Effect } from 'shared/spells';
 
-const COLOR = { bolt: SPELLS.find(s => s.id === 'bolt')!.color, rune: SPELLS.find(s => s.id === 'rune')!.color };
-const boltGeo = new THREE.OctahedronGeometry(0.45, 0);
-const runeGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.08, 6);
+const COLOR = { smite: SPELLS.find(s => s.id === 'smite')!.color, snare: SPELLS.find(s => s.id === 'snare')!.color };
+const smiteGeo = new THREE.OctahedronGeometry(0.45, 0);
+const snareGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.08, 6);
 const ringGeo = new THREE.TorusGeometry(1, 0.08, 4, 16).rotateX(Math.PI / 2);
 
-/** Draws spell effects (bolts, runes) and one-off cast bursts. */
+/** Draws spell effects (smites, snares) and one-off cast bursts. */
 export class EffectsView {
   private meshes = new Map<number, THREE.Mesh>();
   private latest: { at: number; list: Effect[] } = { at: 0, list: [] };
@@ -25,18 +25,18 @@ export class EffectsView {
   }
 
   update(now: number, dt: number) {
-    const ahead = Math.min(0.1, (now - this.latest.at) / 1000); // bolts fly straight: extrapolate between patches
+    const ahead = Math.min(0.1, (now - this.latest.at) / 1000); // smites fly straight: extrapolate between patches
     const live = new Set<number>();
     for (const e of this.latest.list) {
       live.add(e.id);
       let m = this.meshes.get(e.id);
       if (!m) {
-        m = new THREE.Mesh(e.kind === 'bolt' ? boltGeo : runeGeo, new THREE.MeshBasicMaterial({ color: COLOR[e.kind], transparent: true, opacity: 0.9 }));
+        m = new THREE.Mesh(e.kind === 'smite' ? smiteGeo : snareGeo, new THREE.MeshBasicMaterial({ color: COLOR[e.kind], transparent: true, opacity: 0.9 }));
         this.scene.add(m);
         this.meshes.set(e.id, m);
       }
-      m.position.set(e.x + e.vx * ahead, e.y + (e.kind === 'rune' ? 0.06 : 0), e.z + e.vz * ahead);
-      m.rotation.y = now / (e.kind === 'bolt' ? 80 : 600);
+      m.position.set(e.x + e.vx * ahead, e.y + (e.kind === 'snare' ? 0.06 : 0), e.z + e.vz * ahead);
+      m.rotation.y = now / (e.kind === 'smite' ? 80 : 600);
     }
     for (const [id, m] of this.meshes) {
       if (!live.has(id)) { this.scene.remove(m); (m.material as THREE.Material).dispose(); this.meshes.delete(id); }
