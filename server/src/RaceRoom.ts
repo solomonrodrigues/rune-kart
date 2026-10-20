@@ -240,6 +240,7 @@ export class RaceRoom extends Room<RaceState> {
         break;
       case 'countdown':
         st.timer -= DT;
+        st.karts.forEach(k => { k.mana = 0; }); // the orb stays empty on the grid: everyone starts the race with none
         if (st.timer <= 0) { st.phase = 'racing'; this.syncMeta(); st.timer = 0; }
         break;
       case 'racing': {

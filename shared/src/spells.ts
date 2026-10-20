@@ -25,7 +25,7 @@ export const SPELLS: Spell[] = [
 
 export const MANA = {
   max: 100,
-  start: 50,
+  start: 0, // races start with an empty orb
   regen: 8,          // per second → empty to full in 12.5 s
   driftRegen: 3,     // extra per second while drifting, rewarding skill
   catchUp: 0.5,      // last place regenerates this much faster than first (server sets the multiplier)
