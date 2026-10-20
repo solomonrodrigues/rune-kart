@@ -79,7 +79,7 @@ A node test runs the same input sequence twice and asserts identical output. Tha
 ## Milestones
 
 1. **Scaffold:** workspaces, Vite client, Colyseus server, esbuild server bundle, Docker compose. Goal: a cube on a plane, joined by two browser tabs.
-2. **Feel (offline):** kart physics on one greybox glTF track, chase camera, drift and boost. Most of the tuning time goes here.
+2. **Feel (offline):** kart physics on one greybox track (procedural spline for now, see `shared/src/track.ts`; Blender glTF tracks plug into the same `Track` shape later), chase camera, drift and boost. Most of the tuning time goes here.
 3. **Networked driving:** RaceRoom, prediction for your own kart, interpolation for others, server-side bumps.
 4. **Race loop:** lobby, track select, countdown, checkpoints and laps, positions HUD, results.
 5. **Mana + spells:** mana orb HUD, regen, 3–4 starter spells (for example a self boost, a bolt projectile, a dropped rune trap and a ward that blocks one hit), and loadout choice in the lobby.
