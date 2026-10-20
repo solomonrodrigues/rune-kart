@@ -29,7 +29,7 @@ export const KART = {
   offroadMax: 14, offroadDrag: 1.5,
   turnRate: 2.4, turnSpeedFull: 8, // speed at which steering reaches full authority
   grip: 12, driftGrip: 2.2,
-  driftMinSpeed: 10, driftBase: 1.6, driftRange: 0.9,
+  driftMinSpeed: 10, driftBase: 1.15, driftRange: 0.55,
   driftTiers: [1.0, 2.0, 3.0], boostTimes: [0.6, 1.1, 1.8],
   boostMax: 40, boostAccel: 45,
   gravity: 30, airSteer: 0.35,
