@@ -7,7 +7,7 @@ import { hasFinished, lapOf, startProgress, updateProgress, type Progress } from
 import { MANA, spawnEffect, stepEffects, type Effect, type Spell } from 'shared/spells';
 import { Bot, randomProfile } from 'shared/bot';
 import { createTrack, spawnPoint, type Track } from 'shared/track';
-import { GREYBOX } from 'shared/tracks';
+import { DEFAULT_TRACK, TRACKS, trackDef } from 'shared/tracks';
 
 // Mirrors KartState field-for-field so stepKart can run directly on the synced object.
 export class Kart extends Schema implements KartState {
@@ -37,6 +37,7 @@ export class Kart extends Schema implements KartState {
   @type('number') place = 0;
   @type('number') finishTime = -1; // race seconds, -1 until finished
   @type('boolean') bot = false;     // driven by the server, not a player
+  @type('string') name = '';
 }
 
 export class SpellEffect extends Schema implements Effect {
@@ -55,6 +56,8 @@ export class RaceState extends Schema {
   @type('string') phase: Phase = 'lobby';
   @type('number') timer = 0; // countdown/results: seconds left; racing: seconds elapsed
   @type('number') laps = Number(process.env.LAPS) || LAPS; // env override for quick test races
+  @type('string') track = DEFAULT_TRACK;
+  @type('string') host = '';      // session id of the player who runs the lobby (bots, laps)
 }
 
 export type Phase = 'lobby' | 'countdown' | 'racing' | 'results';
@@ -62,6 +65,9 @@ export type Phase = 'lobby' | 'countdown' | 'racing' | 'results';
 const IDLE_INPUT = { steer: 0, throttle: 0, drift: false };
 // Saturated colours that glow well on runes and banners against the dark world, one per grid slot.
 const KART_COLOURS = [0xd8343a, 0x2fbf6f, 0x3a72e0, 0xe8a32a, 0xa456e8, 0x28c4c0, 0xe8508f, 0xe9e0c4];
+const BOT_NAMES = ['Grimwald', 'Morwen', 'Thorne', 'Vesper', 'Ashka', 'Bramble', 'Corvin'];
+/** Trim, strip control characters, cap the length — names are shown to everyone. */
+const cleanName = (v: unknown, max: number) => typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, max) : '';
 const QUEUE_MAX = 20;     // ~330 ms of inputs; beyond that the oldest are dropped
 const MAX_IDLE_TICKS = 15; // after this long with no input, coast the kart (unacked) so it still slows down
 
@@ -77,10 +83,21 @@ export class RaceRoom extends Room<RaceState> {
   private nextEffectId = 1;
   private bots = new Map<string, Bot>();
   private botSeq = 0;
+  private lobbyName = 'Rune Kart';
 
-  onCreate() {
-    this.track = createTrack(GREYBOX);
+  /**
+   * Options come from whoever creates the room: { track, laps, lobby (its name), private }.
+   * Everything is validated — it's client input.
+   */
+  onCreate(options: Record<string, unknown> = {}) {
     this.setState(new RaceState());
+    this.state.track = typeof options.track === 'string' && TRACKS[options.track] ? options.track : DEFAULT_TRACK;
+    this.track = createTrack(trackDef(this.state.track));
+    const laps = Math.round(Number(options.laps));
+    if (laps >= 1 && laps <= 9 && !process.env.LAPS) this.state.laps = laps;
+    this.lobbyName = cleanName(options.lobby, 32) || 'Rune Kart';
+    if (options.private === true) this.setPrivate(true);
+    this.syncMeta();
     this.setPatchRate(1000 / Number(process.env.PATCH_HZ || 30));
     this.onMessage('input', (client, msg: Partial<SeqInput>) => {
       const kart = this.state.karts.get(client.sessionId);
@@ -92,9 +109,14 @@ export class RaceRoom extends Room<RaceState> {
       q.push({ ...clampInput(msg), seq });
       if (q.length > QUEUE_MAX) q.shift();
     });
-    // Lobby only: add (+1) or remove (-1) a bot.
-    this.onMessage('bots', (_client, delta: unknown) => {
-      if (this.state.phase !== 'lobby') return;
+    // Lobby, host only: add (+1) or remove (-1) a bot; change the lap count.
+    this.onMessage('laps', (client, delta: unknown) => {
+      if (this.state.phase !== 'lobby' || client.sessionId !== this.state.host || (delta !== 1 && delta !== -1)) return;
+      this.state.laps = Math.max(1, Math.min(9, this.state.laps + delta));
+      this.syncMeta();
+    });
+    this.onMessage('bots', (client, delta: unknown) => {
+      if (this.state.phase !== 'lobby' || client.sessionId !== this.state.host) return;
       if (delta === 1 && this.state.karts.size < MAX_PLAYERS) this.addBot();
       if (delta === -1) { const last = [...this.bots.keys()].pop(); if (last) this.removeKart(last); }
     });
@@ -108,13 +130,24 @@ export class RaceRoom extends Room<RaceState> {
     }, DT * 1000);
   }
 
-  onJoin(client: Client) {
+  onJoin(client: Client, options: Record<string, unknown> = {}) {
     this.queues.set(client.sessionId, []);
-    this.addKart(client.sessionId);
+    const kart = this.addKart(client.sessionId);
+    kart.name = cleanName(options.player, 16) || `Racer ${this.slots.get(client.sessionId)! + 1}`;
+    if (!this.state.host) this.state.host = client.sessionId; // first in runs the lobby
   }
 
   onLeave(client: Client) {
     this.removeKart(client.sessionId);
+    if (this.state.host === client.sessionId) {
+      // Hand the lobby to the next human, if any.
+      this.state.host = [...this.state.karts.entries()].find(([, k]) => !k.bot)?.[0] ?? '';
+    }
+  }
+
+  /** What the lobby browser shows for this room. */
+  private syncMeta() {
+    this.setMetadata({ name: this.lobbyName, track: this.state.track, laps: this.state.laps, phase: this.state.phase });
   }
 
   /** A kart on the next free grid slot. */
@@ -133,7 +166,7 @@ export class RaceRoom extends Room<RaceState> {
   private addBot() {
     const id = `bot-${++this.botSeq}`;
     const kart = this.addKart(id);
-    Object.assign(kart, { bot: true, ready: true }); // bots never hold up the start
+    Object.assign(kart, { bot: true, ready: true, name: BOT_NAMES[(this.botSeq - 1) % BOT_NAMES.length] }); // bots never hold up the start
     this.bots.set(id, new Bot(randomProfile()));
     this.maxClients = MAX_PLAYERS - this.bots.size;  // bots take player slots
   }
@@ -204,7 +237,7 @@ export class RaceRoom extends Room<RaceState> {
         break;
       case 'countdown':
         st.timer -= DT;
-        if (st.timer <= 0) { st.phase = 'racing'; st.timer = 0; }
+        if (st.timer <= 0) { st.phase = 'racing'; this.syncMeta(); st.timer = 0; }
         break;
       case 'racing': {
         st.timer += DT;
@@ -222,7 +255,7 @@ export class RaceRoom extends Room<RaceState> {
         // Catch-up: trailing karts regenerate mana faster, instead of item-box luck.
         for (const [, k] of racers) k.manaRegenMul = 1 + MANA.catchUp * (k.place - 1) / Math.max(1, racers.length - 1);
         if (!racers.length || racers.every(([, k]) => k.finishTime >= 0) || st.timer >= this.graceEnd) {
-          st.phase = 'results';
+          st.phase = 'results'; this.syncMeta();
           st.timer = RESULTS_SECONDS;
         }
         break;
@@ -230,7 +263,7 @@ export class RaceRoom extends Room<RaceState> {
       case 'results':
         st.timer -= DT;
         if (st.timer <= 0) {
-          st.phase = 'lobby';
+          st.phase = 'lobby'; this.syncMeta();
           st.timer = 0;
           st.karts.forEach(k => { k.ready = k.bot; k.racing = false; k.manaRegenMul = 1; });
         }
@@ -240,7 +273,7 @@ export class RaceRoom extends Room<RaceState> {
 
   private startCountdown() {
     const st = this.state;
-    st.phase = 'countdown';
+    st.phase = 'countdown'; this.syncMeta();
     st.timer = COUNTDOWN_SECONDS;
     this.graceEnd = Infinity;
     st.effects.clear();
