@@ -3,7 +3,7 @@
 // user gesture, so nothing loads or plays until `unlock()` runs from a key press or click.
 
 // Every clip in one place, so swapping a sound is a one-word change.
-const CLIPS = ['boost', 'smite', 'snare', 'ward', 'impact', 'chime', 'wall', 'hit', 'denied'] as const;
+const CLIPS = ['boost', 'smite', 'snare', 'ward', 'chime', 'wall', 'hit', 'denied'] as const;
 type Clip = typeof CLIPS[number];
 
 const MUTE_KEY = 'runekart.muted';
@@ -63,6 +63,32 @@ export class Sound {
     src.start(this.ctx.currentTime + delay);
   }
 
+
+  /**
+   * A soft magical impact, `v` 0..1 loud: a low rounded "thoom" sweeping down, a muffled puff of air, and a
+   * faint high chime — weighty without any harsh crunch.
+   */
+  private thoom(v: number) {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(), og = ctx.createGain();
+    o.frequency.setValueAtTime(170, t);
+    o.frequency.exponentialRampToValueAtTime(55, t + 0.35);
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.exponentialRampToValueAtTime(0.35 * v, t + 0.015);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    o.connect(og).connect(this.master);
+    o.start(t); o.stop(t + 0.5);
+    const n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), ng = ctx.createGain();
+    n.buffer = this.noise;
+    f.type = 'lowpass'; f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(200, t + 0.3);
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.exponentialRampToValueAtTime(0.12 * v, t + 0.02);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    n.connect(f).connect(ng).connect(this.master);
+    n.start(t, Math.random() * 0.5); n.stop(t + 0.4);
+    this.tone(1046, 0.5, { gain: 0.03 * v, delay: 0.02 }); this.tone(1568, 0.4, { gain: 0.015 * v, delay: 0.05 });
+  }
 
   /** A short synth tone for the race cues, with a quick attack and exponential decay. */
   private tone(freq: number, dur: number, opts: { type?: OscillatorType; gain?: number; delay?: number } = {}) {
@@ -171,7 +197,7 @@ export class Sound {
   }
   wallHit(force: number) { this.play('wall', { gain: Math.min(1, 0.25 + force * 0.06), rate: 0.9 + Math.random() * 0.2 }); }
   denied() { this.play('denied', { gain: 0.4, rate: 0.7 }); }
-  hit() { this.play('hit', { gain: 0.9 }); this.play('impact', { gain: 0.5, rate: 0.8 }); }
+  hit() { this.play('hit', { gain: 0.9 }); this.thoom(0.6); }
   spell(id: string) {
     switch (id) {
       case 'haste': this.play('chime', { gain: 0.35, rate: 2 }); break; // the boost plays too; this is the cast
@@ -183,7 +209,7 @@ export class Sound {
   /** A smite landing somewhere; quieter the further away, silent past 80 m. */
   impact(distance: number) {
     const v = Math.max(0, 1 - distance / 80);
-    if (v > 0) this.play('impact', { gain: 0.8 * v });
+    if (v > 0) this.thoom(v);
   }
   countdown(go: boolean) { this.tone(go ? 880 : 440, go ? 0.45 : 0.16, { type: 'triangle', gain: 0.18 }); }
   lap(final: boolean) {

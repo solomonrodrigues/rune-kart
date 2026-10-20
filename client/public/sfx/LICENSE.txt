@@ -4,6 +4,6 @@ License: Creative Commons Zero (CC0) — http://creativecommons.org/publicdomain
 smite.ogg       laserLarge_000
 boost.ogg       lowFrequency_explosion_000
 snare.ogg       impactMining_000
-ward.ogg        forceField_000          impact.ogg  explosionCrunch_000
+ward.ogg        forceField_000
 chime.ogg       impactBell_heavy_004    wall.ogg    impactPlate_heavy_000
 hit.ogg         impactPunch_heavy_000   denied.ogg  impactMetal_light_004
