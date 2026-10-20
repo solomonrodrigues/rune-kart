@@ -4,6 +4,7 @@ import { PORT, ROOM_NAME } from 'shared/constants';
 import { DT, KART, copyKart, driftTier, kartSpeed, newKart, type KartInput, type KartState } from 'shared/kart';
 import { Predictor, type SeqInput } from 'shared/prediction';
 import { createTrack, spawnPoint } from 'shared/track';
+import { autopilot } from 'shared/race';
 import { GREYBOX } from 'shared/tracks';
 import { KartModel } from './KartModel';
 import { EffectsView } from './effects';
@@ -115,6 +116,8 @@ function sampleRemote(r: Remote, t: number): KartState {
 const params = new URLSearchParams(location.search);
 // ?lag=ms simulates a round trip on localhost: half on the way out, half on the way back.
 const LAG = Math.max(0, Number(params.get('lag')) || 0);
+// ?autopilot drives for you the whole time — for testing races solo.
+const AUTOPILOT = params.has('autopilot');
 const delayed = (fn: () => void) => (LAG ? setTimeout(fn, LAG / 2) : fn());
 
 let notice = ''; // shown above the HUD, e.g. on disconnect
@@ -224,6 +227,7 @@ Object.assign(window, { KART, MANA, me: local, correction, predictor, debug: { r
 
 // --- Camera ---
 let camYaw = local.yaw;
+let finishCam = 0; // 0 normal chase cam → 1 swung round to the front after you finish
 const camPos = new THREE.Vector3(), lookAt = new THREE.Vector3(), focus = new THREE.Vector3();
 
 let acc = 0;
@@ -233,7 +237,13 @@ renderer.setAnimationLoop(now => {
   last = now;
   // Frozen on the grid during the countdown (the server enforces this too).
   const frozen = race?.phase === 'countdown';
-  const input = frozen ? { steer: 0, throttle: 0, drift: false } : readInput();
+  // Like Mario Kart: once you've crossed the line, the kart drives itself while the others finish.
+  const mine = race?.standings.find(s => s.id === myId);
+  const finished = !!mine?.racing && mine.finishTime >= 0 && (race?.phase === 'racing' || race?.phase === 'results');
+  const input = frozen ? { steer: 0, throttle: 0, drift: false }
+    : finished || AUTOPILOT ? { ...autopilot(track, local), throttle: finished ? 0.7 : 1 } // a relaxed victory lap
+    : readInput();
+  finishCam = finished ? Math.min(1, finishCam + dt / 1.6) : 0;
 
   acc = Math.min(acc + dt, 0.25);
   while (acc >= DT) {
@@ -272,7 +282,15 @@ renderer.setAnimationLoop(now => {
   const rate = k.driftDir ? 3 : 6;
   camYaw += wrap(k.yaw - camYaw) * (1 - Math.exp(-rate * dt));
   const dist = 6.5 + Math.max(0, speed) * 0.06;
-  if (keys.has('KeyC')) {
+  if (finishCam > 0) {
+    // Finished: swing round from behind to a front view of you cruising, like Mario Kart's finish camera.
+    const swing = Math.PI * finishCam * finishCam * (3 - 2 * finishCam); // smoothstep 0 → π
+    const r = 6.5 - finishCam * 0.8, h = 2.8 - finishCam * 1.1;
+    // Placed directly (no positional smoothing): the kart drives at the camera, so a lagging follow would
+    // let it close in. The swing and camYaw are already smooth.
+    camera.position.set(k.x - Math.sin(camYaw + swing) * r, k.y + h, k.z - Math.cos(camYaw + swing) * r);
+    camera.lookAt(k.x, k.y + 1.1, k.z);
+  } else if (keys.has('KeyC')) {
     // Look back: hard cut to a camera in front of the kart, facing the driver and whoever's behind.
     camera.position.set(k.x + Math.sin(k.yaw) * 5, k.y + 2.2, k.z + Math.cos(k.yaw) * 5);
     camera.lookAt(k.x, k.y + 1.2, k.z);
