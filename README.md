@@ -10,4 +10,6 @@ npm test                       # shared sim tests
 
 Open `/?offline` to drive solo with the sim running locally (no network). In offline mode the console exposes `KART` (live tuning, e.g. `KART.maxSpeed = 35`) and `me` (your kart state).
 
+Online, your kart is predicted locally and reconciled against the server; other karts are drawn 100 ms in the past between server snapshots. Add `?lag=150` to simulate a 150 ms round trip on localhost.
+
 Controls: WASD / arrows to drive, Space or Shift to drift (hold while steering, release for a boost; sparks go blue → orange → purple).

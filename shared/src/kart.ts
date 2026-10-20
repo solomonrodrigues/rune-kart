@@ -180,3 +180,39 @@ export function respawn(k: KartState, track: Track): void {
 
 /** Forward speed in m/s, for HUD and visuals. */
 export const kartSpeed = (k: KartState) => k.vx * Math.sin(k.yaw) + k.vz * Math.cos(k.yaw);
+
+// Explicit field copy: Colyseus schema fields are accessors, so Object.assign/spread would miss them.
+export const KART_FIELDS = Object.keys(newKart({ x: 0, y: 0, z: 0, yaw: 0 })) as (keyof KartState)[];
+export function copyKart<T extends KartState>(to: T, from: KartState): T {
+  for (const f of KART_FIELDS) to[f] = from[f];
+  return to;
+}
+
+const BUMP_RADIUS = 1.0;      // per kart, in the ground plane
+const BUMP_HEIGHT = 1.5;      // karts further apart vertically pass over/under each other
+const BUMP_RESTITUTION = 0.6;
+
+/** Server-side kart-vs-kart collisions: separate overlapping karts and bounce their velocities. */
+export function resolveBumps(karts: KartState[]): void {
+  for (let i = 0; i < karts.length; i++) {
+    for (let j = i + 1; j < karts.length; j++) {
+      const a = karts[i], b = karts[j];
+      if (Math.abs(a.y - b.y) > BUMP_HEIGHT) continue;
+      let dx = b.x - a.x, dz = b.z - a.z;
+      let d = Math.hypot(dx, dz);
+      if (d >= BUMP_RADIUS * 2) continue;
+      if (d < 1e-6) { dx = 1; dz = 0; d = 1e-6; } // exactly stacked: split along x
+      const nx = dx / d, nz = dz / d;
+      const overlap = (BUMP_RADIUS * 2 - d) / 2;
+      a.x -= nx * overlap; a.z -= nz * overlap;
+      b.x += nx * overlap; b.z += nz * overlap;
+      // Equal masses: exchange the closing part of the velocity along the contact normal.
+      const closing = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
+      if (closing > 0) {
+        const imp = closing * (1 + BUMP_RESTITUTION) / 2;
+        a.vx -= nx * imp; a.vz -= nz * imp;
+        b.vx += nx * imp; b.vz += nz * imp;
+      }
+    }
+  }
+}

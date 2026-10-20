@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { Client } from 'colyseus.js';
 import { PORT, ROOM_NAME } from 'shared/constants';
-import { DT, KART, driftTier, kartSpeed, newKart, stepKart, type KartInput, type KartState } from 'shared/kart';
+import { DT, KART, copyKart, driftTier, kartSpeed, newKart, type KartInput, type KartState } from 'shared/kart';
+import { Predictor, type SeqInput } from 'shared/prediction';
 import { createTrack, spawnPoint } from 'shared/track';
 import { GREYBOX } from 'shared/tracks';
 import { KartModel } from './KartModel';
@@ -40,128 +41,167 @@ const readInput = (): KartInput => ({
   drift: keys.has('Space') || keys.has('ShiftLeft') || keys.has('ShiftRight'),
 });
 
-// --- Snapshot interpolation: every kart is drawn between its last two states ---
-interface Interp { prev: KartState; curr: KartState; t0: number; t1: number; model: KartModel }
-const karts = new Map<string, Interp>();
+// --- Karts on screen ---
 const view = newKart({ x: 0, y: 0, z: 0, yaw: 0 }); // scratch: the blended state we render
-// Explicit field copy: Colyseus schema fields are accessors, so Object.assign/spread would miss them.
-const FIELDS = Object.keys(view) as (keyof KartState)[];
-const copy = (to: KartState, from: KartState) => { for (const f of FIELDS) to[f] = from[f]; return to; };
+const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
-function push(id: string, s: KartState, t: number, color: number) {
-  let e = karts.get(id);
-  if (!e) {
-    e = { prev: copy(newKart(s), s), curr: copy(newKart(s), s), t0: t, t1: t, model: new KartModel(color) };
-    scene.add(e.model.root);
-    karts.set(id, e);
+function lerpKart(out: KartState, a: KartState, b: KartState, t: number): KartState {
+  copyKart(out, b);
+  for (const f of ['x', 'y', 'z', 'nx', 'ny', 'nz', 'vx', 'vy', 'vz'] as const) out[f] = a[f] + (b[f] - a[f]) * t;
+  out.yaw = a.yaw + wrap(b.yaw - a.yaw) * t;
+  return out;
+}
+
+// Remote karts are drawn INTERP_DELAY in the past, between the two snapshots that bracket that moment,
+// so patch jitter never shows. If snapshots stop arriving, extrapolate briefly on velocity.
+const INTERP_DELAY = 100;
+const MAX_EXTRAPOLATE = 0.1;
+interface Remote { snaps: { t: number; s: KartState }[]; model: KartModel }
+const remotes = new Map<string, Remote>();
+
+function sampleRemote(r: Remote, t: number): KartState {
+  const snaps = r.snaps;
+  while (snaps.length > 2 && snaps[1].t <= t) snaps.shift(); // keep the pair that brackets t
+  const a = snaps[0], b = snaps[1];
+  if (!b || t <= a.t) {
+    const ahead = Math.min(MAX_EXTRAPOLATE, Math.max(0, (t - a.t) / 1000));
+    copyKart(view, a.s);
+    view.x += a.s.vx * ahead; view.y += a.s.vy * ahead; view.z += a.s.vz * ahead;
+    return view;
   }
-  copy(e.prev, e.curr);
-  copy(e.curr, s);
-  e.t0 = e.t1;
-  e.t1 = t;
+  if (t >= b.t) {
+    copyKart(view, b.s);
+    const ahead = Math.min(MAX_EXTRAPOLATE, (t - b.t) / 1000);
+    view.x += b.s.vx * ahead; view.y += b.s.vy * ahead; view.z += b.s.vz * ahead;
+    return view;
+  }
+  return lerpKart(view, a.s, b.s, (t - a.t) / (b.t - a.t));
 }
 
-function blend(e: Interp, alpha: number): KartState {
-  const a = e.prev, b = e.curr;
-  copy(view, b);
-  for (const f of ['x', 'y', 'z', 'nx', 'ny', 'nz', 'vx', 'vz'] as const) view[f] = a[f] + (b[f] - a[f]) * alpha;
-  view.yaw = a.yaw + Math.atan2(Math.sin(b.yaw - a.yaw), Math.cos(b.yaw - a.yaw)) * alpha;
-  return view;
-}
+// --- Local kart: predicted every fixed step, reconciled against the server when online ---
+const params = new URLSearchParams(location.search);
+// ?lag=ms simulates a round trip on localhost: half on the way out, half on the way back.
+const LAG = Math.max(0, Number(params.get('lag')) || 0);
+const delayed = (fn: () => void) => (LAG ? setTimeout(fn, LAG / 2) : fn());
 
-// --- Simulation source: local (offline) or server snapshots (online) ---
-let myId = 'local';
 let banner = ''; // shown above the HUD, e.g. on disconnect
-let sendInput = (_: KartInput) => {};
-let simAlpha: (now: number) => number;
+let send = (_: SeqInput) => {};
+let start: KartState = newKart(spawnPoint(track, 0));
+let myColor = 0xe84a3c;
+let onServerState = (_: KartState, __: number) => {};
 
-if (OFFLINE) {
-  const me = newKart(spawnPoint(track, 0));
-  let acc = 0, last = performance.now();
-  push(myId, me, 0, 0xe84a3c);
-  // Live tuning/debugging from the console, e.g. KART.maxSpeed = 35
-  Object.assign(window, { KART, me });
-  simAlpha = now => {
-    acc = Math.min(acc + (now - last) / 1000, 0.25);
-    last = now;
-    while (acc >= DT) {
-      stepKart(me, readInput(), track, DT);
-      push(myId, me, 0, 0);
-      acc -= DT;
-    }
-    return acc / DT;
-  };
-} else {
+if (!OFFLINE) {
   // Dev: Vite serves the page, so the game server is on its own port. Prod: same origin.
   const wsUrl = import.meta.env.DEV ? `ws://${location.hostname}:${PORT}` : location.origin.replace(/^http/, 'ws');
   const room = await new Client(wsUrl).joinOrCreate<any>(ROOM_NAME).catch(err => {
     hud.textContent = `Could not connect to ${wsUrl}: ${err.message ?? err}. Add ?offline to drive solo.`;
     throw err;
   });
-  myId = room.sessionId;
   let connected = true;
   room.onLeave(() => { connected = false; banner = 'Disconnected from server — reload to rejoin.<br>'; });
-  sendInput = input => { if (connected) room.send('input', input); };
-  room.onStateChange(state => {
-    const now = performance.now();
-    state.karts.forEach((k: any, id: string) => push(id, k, now, k.color));
-    for (const [id, e] of karts) {
-      if (!state.karts.has(id)) { scene.remove(e.model.root); e.model.dispose(); karts.delete(id); }
-    }
+  send = input => delayed(() => { if (connected) room.send('input', input); });
+
+  // Wait for our kart so prediction starts from the server's spawn.
+  const mine = await new Promise<any>(resolve => {
+    const check = () => { const k = room.state.karts?.get(room.sessionId); if (k) resolve(k); else room.onStateChange.once(check); };
+    check();
   });
-  // shortcut: draws remote state one patch behind (adds ~33ms to your own kart); milestone 3 predicts it.
-  simAlpha = now => {
-    const e = karts.get(myId);
-    if (!e || e.t1 === e.t0) return 1;
-    return Math.min(1, (now - e.t1) / (e.t1 - e.t0));
-  };
+  start = copyKart(newKart(mine), mine);
+  myColor = mine.color;
+
+  room.onStateChange(state => {
+    // Copy out now (the live state keeps changing), deliver after the simulated lag.
+    const snap: [string, KartState, number, number][] = [];
+    state.karts.forEach((k: any, id: string) => snap.push([id, copyKart(newKart(k), k), k.ack, k.color]));
+    delayed(() => {
+      const now = performance.now();
+      for (const [id, s, ack, color] of snap) {
+        if (id === room.sessionId) { onServerState(s, ack); continue; }
+        let r = remotes.get(id);
+        if (!r) {
+          r = { snaps: [], model: new KartModel(color) };
+          scene.add(r.model.root);
+          remotes.set(id, r);
+        }
+        r.snaps.push({ t: now, s });
+      }
+      for (const [id, r] of remotes) {
+        if (!snap.some(([sid]) => sid === id)) { scene.remove(r.model.root); r.model.dispose(); remotes.delete(id); }
+      }
+    });
+  });
 }
 
-if (!OFFLINE) setInterval(() => sendInput(readInput()), DT * 1000);
+const predictor = new Predictor(start, track);
+const local = predictor.state;
+const localPrev = copyKart(newKart(local), local); // state one step back, for render interpolation
+const localView = newKart(local); // scratch: the local kart as drawn
+const localModel = new KartModel(myColor);
+scene.add(localModel.root);
+// Visual-only offset that absorbs reconciliation corrections and decays to zero.
+const correction = { x: 0, y: 0, z: 0, yaw: 0 };
+const SNAP_DISTANCE = 4; // bigger corrections (respawns, big bumps) are applied immediately
+
+onServerState = (server, ack) => {
+  const err = predictor.reconcile(server, ack);
+  if (Math.hypot(err.x, err.y, err.z) > SNAP_DISTANCE) return;
+  correction.x += err.x; correction.y += err.y; correction.z += err.z; correction.yaw += wrap(err.yaw);
+  // Shift the previous step too, so render interpolation doesn't see a jump.
+  localPrev.x -= err.x; localPrev.y -= err.y; localPrev.z -= err.z; localPrev.yaw -= err.yaw;
+};
+
+// Live tuning/debugging from the console, e.g. KART.maxSpeed = 35
+Object.assign(window, { KART, me: local, correction, predictor });
 
 // --- Camera ---
-let camYaw = 0, camInit = false;
+let camYaw = local.yaw;
 const camPos = new THREE.Vector3(), lookAt = new THREE.Vector3();
 
+let acc = 0;
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  const alpha = simAlpha(now);
   const input = readInput();
 
-  for (const [id, e] of karts) {
-    // Remote karts each have their own patch timing; the local kart uses the sim's alpha.
-    const a = id === myId ? alpha : e.t1 === e.t0 ? 1 : Math.min(1, (now - e.t1) / (e.t1 - e.t0));
-    e.model.update(blend(e, a), id === myId ? input.steer : 0, dt, now / 1000);
+  acc = Math.min(acc + dt, 0.25);
+  while (acc >= DT) {
+    copyKart(localPrev, local);
+    send(predictor.step(input));
+    acc -= DT;
   }
 
-  const me = karts.get(myId);
-  if (me) {
-    const k = blend(me, alpha);
-    const speed = kartSpeed(k);
-    if (!camInit) { camYaw = k.yaw; camInit = true; }
-    // Lag the camera's heading behind the kart's, more so mid-drift so the slide reads.
-    const rate = k.driftDir ? 3 : 6;
-    camYaw += Math.atan2(Math.sin(k.yaw - camYaw), Math.cos(k.yaw - camYaw)) * (1 - Math.exp(-rate * dt));
-    const dist = 6.5 + Math.max(0, speed) * 0.06;
-    camPos.set(k.x - Math.sin(camYaw) * dist, k.y + 2.8, k.z - Math.cos(camYaw) * dist);
-    camera.position.lerp(camPos, 1 - Math.exp(-12 * dt));
-    lookAt.set(k.x + Math.sin(camYaw) * 4, k.y + 1, k.z + Math.cos(camYaw) * 4);
-    camera.lookAt(lookAt);
-    const fov = 70 + Math.max(0, speed - KART.maxSpeed * 0.5) * 0.4 + (k.boostTime > 0 ? 8 : 0);
-    camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt));
-    camera.updateProjectionMatrix();
+  const decay = Math.exp(-dt / 0.1);
+  correction.x *= decay; correction.y *= decay; correction.z *= decay; correction.yaw *= decay;
+  const k = lerpKart(localView, localPrev, local, acc / DT);
+  k.x += correction.x; k.y += correction.y; k.z += correction.z; k.yaw += correction.yaw;
+  localModel.update(k, input.steer, dt, now / 1000);
 
-    sun.position.set(k.x + 30, k.y + 50, k.z + 20);
-    sun.target.position.set(k.x, k.y, k.z);
+  const renderT = now - INTERP_DELAY;
+  for (const r of remotes.values()) r.model.update(sampleRemote(r, renderT), 0, dt, now / 1000);
 
-    const tier = driftTier(k);
-    hud.innerHTML = banner +
-      `<b>${Math.round(Math.abs(speed) * 3.6)}</b> km/h` +
-      (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
-      (k.boostTime > 0 ? ' · BOOST' : '') +
-      `<br><small>${OFFLINE ? 'offline' : `${karts.size} racer${karts.size === 1 ? '' : 's'}`} · WASD drive · Space/Shift drift</small>`;
-  }
+  const speed = kartSpeed(k);
+  // Lag the camera's heading behind the kart's, more so mid-drift so the slide reads.
+  const rate = k.driftDir ? 3 : 6;
+  camYaw += wrap(k.yaw - camYaw) * (1 - Math.exp(-rate * dt));
+  const dist = 6.5 + Math.max(0, speed) * 0.06;
+  camPos.set(k.x - Math.sin(camYaw) * dist, k.y + 2.8, k.z - Math.cos(camYaw) * dist);
+  camera.position.lerp(camPos, 1 - Math.exp(-12 * dt));
+  lookAt.set(k.x + Math.sin(camYaw) * 4, k.y + 1, k.z + Math.cos(camYaw) * 4);
+  camera.lookAt(lookAt);
+  const fov = 70 + Math.max(0, speed - KART.maxSpeed * 0.5) * 0.4 + (k.boostTime > 0 ? 8 : 0);
+  camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt));
+  camera.updateProjectionMatrix();
+
+  sun.position.set(k.x + 30, k.y + 50, k.z + 20);
+  sun.target.position.set(k.x, k.y, k.z);
+
+  const tier = driftTier(k);
+  const racers = remotes.size + 1;
+  hud.innerHTML = banner +
+    `<b>${Math.round(Math.abs(speed) * 3.6)}</b> km/h` +
+    (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
+    (k.boostTime > 0 ? ' · BOOST' : '') +
+    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift</small>`;
   renderer.render(scene, camera);
 });
