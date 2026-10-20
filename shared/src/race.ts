@@ -1,7 +1,7 @@
 // Race progress along the track centreline. Distance is counted in samples, unwrapped across laps:
 // negative on the grid, 0 at the start line, samples.length per lap. It can only move a few samples per
 // tick, so cutting across the infield or teleporting doesn't skip ahead.
-import { nearestSample, type Track } from './track.ts';
+import { LEVEL_WEIGHT, nearestSample, type Track } from './track.ts';
 import type { KartInput, KartState } from './kart.ts';
 
 export interface Progress {
@@ -16,7 +16,7 @@ const mod = (a: number, n: number) => ((a % n) + n) % n;
 
 export function startProgress(track: Track, k: KartState): Progress {
   const n = track.samples.length;
-  const i = track.samples.indexOf(nearestSample(track, k.x, k.z));
+  const i = track.samples.indexOf(nearestSample(track, k.x, k.z, k.y));
   const idx = i > n / 2 ? i - n : i; // grid slots sit just behind the line
   return { idx, dist: idx };
 }
@@ -27,11 +27,11 @@ export function updateProgress(p: Progress, track: Track, k: KartState): void {
   let best = p.idx, bestD = Infinity;
   for (let o = -WINDOW; o <= WINDOW; o++) {
     const s = samples[mod(p.idx + o, n)];
-    const d = (s.x - k.x) ** 2 + (s.z - k.z) ** 2;
+    const d = (s.x - k.x) ** 2 + (s.z - k.z) ** 2 + (LEVEL_WEIGHT * (s.y - k.y)) ** 2;
     if (d < bestD) { bestD = d; best = p.idx + o; }
   }
   if (bestD > RESYNC_SQ) {
-    const i = samples.indexOf(nearestSample(track, k.x, k.z));
+    const i = samples.indexOf(nearestSample(track, k.x, k.z, k.y));
     // Pick the unwrapped index for i closest to where we were.
     best = p.idx + (mod(i - mod(p.idx, n) + n / 2, n) - n / 2);
   }
@@ -49,7 +49,7 @@ export const hasFinished = (p: Progress, track: Track, laps: number) => p.dist >
 
 /** Steer towards the centreline a few samples ahead. Used by tests and the headless client; bots later. */
 export function autopilot(track: Track, k: KartState, lookahead = 4): KartInput {
-  const t = track.samples[mod(track.samples.indexOf(nearestSample(track, k.x, k.z)) + lookahead, track.samples.length)];
+  const t = track.samples[mod(track.samples.indexOf(nearestSample(track, k.x, k.z, k.y)) + lookahead, track.samples.length)];
   const want = Math.atan2(t.x - k.x, t.z - k.z);
   const diff = Math.atan2(Math.sin(want - k.yaw), Math.cos(want - k.yaw));
   return { steer: Math.max(-1, Math.min(1, -diff * 3)), throttle: 1, drift: false };

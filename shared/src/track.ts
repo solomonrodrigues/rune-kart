@@ -14,6 +14,11 @@ export interface TrackDef {
   width: number;
   wallHeight: number;
   samples: number; // segments around the loop
+  /**
+   * Road at or above this height is a bridge: railings on both sides instead of walls down to the
+   * ground, so another road can pass underneath. Leave unset for tracks that never cross themselves.
+   */
+  bridgeAbove?: number;
 }
 
 export interface TrackSample { x: number; y: number; z: number; yaw: number }
@@ -28,6 +33,7 @@ export interface Track {
   wallBVH: MeshBVH;
   groundBVH: MeshBVH;
   samples: TrackSample[]; // centreline, used for spawns and respawns
+  bridges: number[];      // sample indices whose segment is a bridge (the client draws pillars under them)
   outer: number;          // ±1: which side of the centreline (along the right vector) has the outer wall
 }
 
@@ -62,6 +68,7 @@ export function createTrack(def: TrackDef): Track {
 
   const road: number[] = [], roadCol: number[] = [], walls: number[] = [], wallCol: number[] = [];
   const trim: number[] = [], trimCol: number[] = [];
+  const bridges: number[] = [];
   const quad = (out: number[], a: Vector3, b: Vector3, c: Vector3, d: Vector3) =>
     out.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, b.x, b.y, b.z, d.x, d.y, d.z, c.x, c.y, c.z);
   const colour = (out: number[], rgb: number[], verts: number) => { for (let v = 0; v < verts; v++) out.push(...rgb); };
@@ -77,6 +84,22 @@ export function createTrack(def: TrackDef): Track {
 
     const edge = (k: number, side: number) => centres[k].clone().addScaledVector(rights[k], side * half);
     const at = (v: Vector3, y: number) => new Vector3(v.x, y, v.z);
+    if (def.bridgeAbove !== undefined && Math.min(centres[i].y, centres[j].y) >= def.bridgeAbove) {
+      // Bridge: a railing each side (from just under the deck to wallHeight above it) and nothing down
+      // to the ground, so the road below stays clear. A deck slab underneath is visual only.
+      for (const side of [-1, 1]) {
+        const ei = edge(i, side), ej = edge(j, side);
+        quad(walls, at(ei, ei.y - 0.6), at(ej, ej.y - 0.6), at(ei, ei.y + def.wallHeight), at(ej, ej.y + def.wallHeight));
+        colour(wallCol, stripe ? [0.4, 0.38, 0.44] : [0.47, 0.45, 0.51], 6);
+        quad(trim, at(ei, ei.y - 0.9), at(ej, ej.y - 0.9), at(ei, ei.y - 0.6), at(ej, ej.y - 0.6)); // deck edge
+        colour(trimCol, [0.3, 0.28, 0.32], 6);
+      }
+      const li = L(i), ri = R(i), lj = L(j), rj = R(j);
+      quad(trim, at(li, li.y - 0.9), at(ri, ri.y - 0.9), at(lj, lj.y - 0.9), at(rj, rj.y - 0.9)); // underside
+      colour(trimCol, [0.22, 0.2, 0.24], 6);
+      bridges.push(i);
+      continue;
+    }
     // Outer wall: ground to wallHeight above the road.
     const oi = edge(i, outer), oj = edge(j, outer);
     quad(walls, at(oi, GROUND_Y), at(oj, GROUND_Y), at(oi, oi.y + def.wallHeight), at(oj, oj.y + def.wallHeight));
@@ -107,6 +130,7 @@ export function createTrack(def: TrackDef): Track {
     roadBVH: new MeshBVH(roadGeo), wallBVH: new MeshBVH(wallGeo), groundBVH: new MeshBVH(groundGeo),
     samples,
     outer,
+    bridges,
   };
 }
 
@@ -118,10 +142,17 @@ export function spawnPoint(track: Track, slot: number): TrackSample {
   return { x: s.x + Math.cos(s.yaw) * -side, y: s.y, z: s.z + Math.sin(s.yaw) * side, yaw: s.yaw };
 }
 
-export function nearestSample(track: Track, x: number, z: number): TrackSample {
+/** Height difference counts this much more than horizontal distance when matching a point to the track. */
+export const LEVEL_WEIGHT = 3;
+
+/**
+ * The centreline sample closest to (x, z). Pass `y` on tracks that cross over themselves: height counts
+ * (×LEVEL_WEIGHT), so a kart on the lower road isn't matched to the bridge right above it, or vice versa.
+ */
+export function nearestSample(track: Track, x: number, z: number, y?: number): TrackSample {
   let best = track.samples[0], bestD = Infinity;
   for (const s of track.samples) {
-    const d = (s.x - x) ** 2 + (s.z - z) ** 2;
+    const d = (s.x - x) ** 2 + (s.z - z) ** 2 + (y === undefined ? 0 : (LEVEL_WEIGHT * (s.y - y)) ** 2);
     if (d < bestD) { bestD = d; best = s; }
   }
   return best;

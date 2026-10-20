@@ -94,6 +94,24 @@ export function buildScene(track: Track) {
   });
   scene.add(runes);
 
+  // Stone pillars under bridges: a pair at the deck edges every few samples, ground to deck (visual only;
+  // the road below never runs under a pillar because pillars sit at the bridge's own edges).
+  const pillarSlots = track.bridges.filter((_, i) => i % 6 === 0);
+  const pillars = new THREE.InstancedMesh(new THREE.BoxGeometry(1.6, 1, 1.6).translate(0, 0.5, 0), flat(0x3b3843), pillarSlots.length * 2);
+  pillarSlots.forEach((idx, i) => {
+    const s = samples[idx], r = right(s);
+    q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, s.yaw);
+    for (const side of [-1, 1]) {
+      const px = s.x + r.x * side * (half - 1), pz = s.z + r.z * side * (half - 1);
+      // Never plant a pillar on the road passing underneath (they don't collide; karts would drive through).
+      const onRoadBelow = samples.some(o => o.y < s.y - 5 && (o.x - px) ** 2 + (o.z - pz) ** 2 < (half + 2) ** 2);
+      pillars.setMatrixAt(i * 2 + (side + 1) / 2, m.compose(p.set(px, -0.1, pz), q, sc.set(1, onRoadBelow ? 0 : s.y - 0.8, 1)));
+    }
+  });
+  pillars.castShadow = true;
+  scene.add(pillars);
+  sc.set(1, 1, 1);
+
   // Start: a glowing rune line across the road under a stone arch.
   const s0 = samples[0], r0 = right(s0);
   q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, s0.yaw);

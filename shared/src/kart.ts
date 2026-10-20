@@ -210,7 +210,7 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
 }
 
 export function respawn(k: KartState, track: Track): void {
-  const s = nearestSample(track, k.x, k.z);
+  const s = nearestSample(track, k.x, k.z, k.y);
   const { mana, manaRegenMul, cd0, cd1, cd2, cd3 } = k; // falling off doesn't refund or drain mana
   Object.assign(k, newKart({ x: s.x, y: s.y + 1, z: s.z, yaw: s.yaw }), { mana, manaRegenMul, cd0, cd1, cd2, cd3 });
 }
