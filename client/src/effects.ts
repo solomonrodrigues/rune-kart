@@ -64,8 +64,9 @@ export class EffectsView {
   private live = new Map<number, Live>();
   private latest: { at: number; list: Effect[] } = { at: 0, list: [] };
   private bursts: { mesh: THREE.Mesh; age: number; grow: number }[] = [];
-  // A fixed pool of lights that follow the nearest smites (a fixed count avoids shader recompiles).
-  private lights = [0, 1].map(() => new THREE.PointLight(SMITE, 0, 14, 1.5));
+  // One fixed light that follows the nearest smite (fixed count avoids shader recompiles; each extra
+  // always-on light costs ~0.5 ms a frame across the whole screen).
+  private lights = [new THREE.PointLight(SMITE, 0, 14, 1.5)];
 
   constructor(private scene: THREE.Scene) {
     for (const l of this.lights) scene.add(l);

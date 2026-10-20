@@ -14,14 +14,18 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { renderRace, type RaceView, type Standing } from './raceUi';
 
 const OFFLINE = new URLSearchParams(location.search).has('offline');
 const hud = document.getElementById('hud')!;
 
 // --- Renderer / scene ---
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// No canvas MSAA: everything goes through the composer below, which antialiases with FXAA instead.
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+// Retina at 2× is ~78% more pixels than 1.5× for little visible gain on a low-poly game.
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
@@ -30,15 +34,20 @@ const { scene, sun, update: updateScene } = buildScene(track);
 const effects = new EffectsView(scene);
 const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 600);
 // Bloom makes the bright, unlit things (runes, crystals, spells, the moon) glow against the dark.
-// A multisampled target keeps the antialiasing the plain renderer had.
-const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { samples: 4, type: THREE.HalfFloatType }));
+// Half-float target so over-bright colours survive into the bloom. No MSAA on it: measured at 2400×1500,
+// 4× MSAA cost ~8 ms a frame; FXAA at the end gives near the same edges for ~0.5 ms.
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
 composer.addPass(new RenderPass(scene, camera));
 composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.85, 0.45, 0.55)); // strength, radius, threshold
 composer.addPass(new OutputPass());
+const fxaa = new ShaderPass(FXAAShader); // after OutputPass: FXAA expects display (sRGB) colours
+composer.addPass(fxaa);
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
   composer.setPixelRatio(renderer.getPixelRatio());
   composer.setSize(innerWidth, innerHeight);
+  const pr = renderer.getPixelRatio();
+  fxaa.material.uniforms.resolution.value.set(1 / (innerWidth * pr), 1 / (innerHeight * pr));
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
 }
@@ -207,7 +216,7 @@ onServerState = (server, ack) => {
 };
 
 // Live tuning/debugging from the console, e.g. KART.maxSpeed = 35
-Object.assign(window, { KART, MANA, me: local, correction, predictor });
+Object.assign(window, { KART, MANA, me: local, correction, predictor, debug: { renderer, composer, scene, sun, headlight } });
 
 // --- Camera ---
 let camYaw = local.yaw;
