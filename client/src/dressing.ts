@@ -146,9 +146,12 @@ export function buildDressing(track: Track, rand: () => number, clear: (x: numbe
   const poleMesh = pool(new THREE.CylinderGeometry(0.08, 0.12, 1, 5).translate(0, 0.5, 0), flat(IRON), bannerSpots.length);
   const bar = pool(new THREE.BoxGeometry(0.06, 0.06, 1.3), flat(IRON), bannerSpots.length);
   const CW = 1.1, CH = 2.2, GX = 4, GY = 8; // cloth size and grid
-  const cloth = new THREE.PlaneGeometry(CW, CH, GX, GY).translate(0, -CH / 2, 0); // hangs down from its top edge
-  const cp = cloth.attributes.position;
-  for (let i = 0; i < cp.count; i++) if (cp.getY(i) < -CH + 0.01) cp.setY(i, cp.getY(i) + (Math.round(cp.getX(i) / (CW / GX)) % 2 ? 0.35 : 0)); // tattered tails
+  const grid = new THREE.PlaneGeometry(CW, CH, GX, GY).translate(0, -CH / 2, 0); // hangs down from its top edge
+  const gp = grid.attributes.position;
+  for (let i = 0; i < gp.count; i++) if (gp.getY(i) < -CH + 0.01) gp.setY(i, gp.getY(i) + (Math.round(gp.getX(i) / (CW / GX)) % 2 ? 0.35 : 0)); // tattered tails
+  // Non-indexed before anything is stored: the merge un-indexes too, and the wave writes vertices by position in
+  // that layout, so the saved rest shapes must use the same one.
+  const cloth = grid.toNonIndexed();
   const bannerBase: Float32Array[] = [];
   const parts = bannerSpots.map(s => {
     const top = s.y + 5.6;
