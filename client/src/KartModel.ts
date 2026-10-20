@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { driftTier, KART, type KartState } from 'shared/kart';
-import { SPELLS } from 'shared/spells';
+import { MANA, SPELLS } from 'shared/spells';
 import { Monkey } from './Monkey';
 import { mergeStatic } from './mergeStatic';
 
@@ -11,6 +11,9 @@ const hdr = (hex: number, k: number) => new THREE.Color(hex).multiplyScalar(k);
 /** Spark and boost-flame colour per drift tier: 1 blue, 2 orange, 3 purple (index 0 unused). */
 const TIER = [0, 0x4fc3ff, 0xff9d2e, 0xd65cff].map(c => hdr(c, 3));
 const HASTE = hdr(SPELLS.find(s => s.id === 'haste')!.color, 3);
+const TANK_R = 0.26;
+const MANA_GLOW = hdr(0x3a5cff, 1.7);  // over-bright so the tank glows (bloom)
+const MANA_FULL = hdr(0x7f9bff, 2.0);
 const HEADLIGHT = 0xffe2b0;
 
 /** A faint cone of light from a lamp, brightest at the lamp and fading to nothing (vertex alpha). */
@@ -33,6 +36,12 @@ export class KartModel {
   private ward: THREE.Mesh;
   private driver = new Monkey();
   private banner = new THREE.Group();
+  // Mana tank on the back: the liquid is clipped by a world-horizontal plane, so it reads the kart's mana
+  // and stays level however the kart tilts.
+  private tank = new THREE.Group();
+  private surface = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0); // keeps what's below the surface
+  private liquidMat = new THREE.MeshBasicMaterial({ color: MANA_GLOW.clone(), side: THREE.DoubleSide, clippingPlanes: [this.surface] });
+  private tankPos = new THREE.Vector3();
   private slide = 0;
   private wheelSpin = 0;
 
@@ -135,6 +144,25 @@ export class KartModel {
     this.ward.position.y = 0.7;
     this.ward.visible = false;
 
+    // Glass mana tank in an iron cage behind the seat, where the chase camera can see it.
+    const tankIron = flat(0x5f6069);
+    this.tank.position.set(0, 0.98, -1.0);
+    const liquid = new THREE.Mesh(new THREE.SphereGeometry(TANK_R, 12, 8), this.liquidMat);
+    const glass = new THREE.Mesh(
+      new THREE.SphereGeometry(TANK_R * 1.05, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0xbfd0ff, transparent: true, opacity: 0.14, depthWrite: false }),
+    );
+    const ring = (rx: number, ry: number) => {
+      const m = new THREE.Mesh(new THREE.TorusGeometry(TANK_R * 1.1, 0.025, 4, 14), tankIron);
+      m.rotation.set(rx, ry, 0);
+      m.castShadow = true;
+      return m;
+    };
+    const cradle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.17, 0.2, 6), tankIron);
+    cradle.position.y = -TANK_R - 0.06;
+    this.tank.add(liquid, glass, ring(Math.PI / 2, 0), ring(0, 0), ring(0, Math.PI / 2), cradle);
+    this.body.add(this.tank);
+
     this.root.add(this.body, this.ward);
     // ~40 primitives → a handful of draw calls; the animated parts stay separate.
     mergeStatic(this.body, [...this.wheels, ...this.sparks, this.flame]);
@@ -182,6 +210,14 @@ export class KartModel {
     // The flame burns the colour of the sparks it was released on (Haste has its own).
     (this.flame.material as THREE.MeshBasicMaterial).color.copy(k.boostTier ? TIER[k.boostTier] : HASTE);
     this.flame.scale.set(1, 1, boost * (0.8 + 0.4 * Math.abs(Math.sin(time * 30))));
+
+    // Mana tank level: a world-horizontal surface at the right height through the tank.
+    this.root.updateMatrixWorld(true);
+    this.tank.getWorldPosition(this.tankPos);
+    const level = Math.min(1, Math.max(0, k.mana / MANA.max));
+    this.surface.constant = this.tankPos.y - TANK_R + level * 2 * TANK_R + (level >= 1 ? 0.05 : 0);
+    if (level >= 1) this.liquidMat.color.copy(MANA_FULL).multiplyScalar(1 + 0.1 * Math.sin(time * 4)); // full: brighter, pulsing
+    else this.liquidMat.color.copy(MANA_GLOW);
   }
 
   dispose() {

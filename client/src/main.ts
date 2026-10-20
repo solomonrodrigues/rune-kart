@@ -27,6 +27,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'h
 // Retina at 2× is ~78% more pixels than 1.5× for little visible gain on a low-poly game.
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.shadowMap.enabled = true;
+renderer.localClippingEnabled = true; // mana tanks clip their liquid to the mana level
 document.body.appendChild(renderer.domElement);
 
 const track = createTrack(GREYBOX);
