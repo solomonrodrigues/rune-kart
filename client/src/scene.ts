@@ -152,8 +152,11 @@ export function buildScene(track: Track) {
     kinds[k].setMatrixAt(count[k]++, matrix);
     return true;
   };
+  // Scatter over the track's own area plus a margin, so every track gets a full forest.
+  const xs = samples.map(s => s.x), zs = samples.map(s => s.z), M = 110;
+  const bx0 = Math.min(...xs) - M, bx1 = Math.max(...xs) + M, bz0 = Math.min(...zs) - M, bz1 = Math.max(...zs) + M;
   for (let i = 0; i < 4000; i++) {
-    const x = (rand() - 0.5) * 380, z = (rand() - 0.5) * 320 + 50;
+    const x = bx0 + rand() * (bx1 - bx0), z = bz0 + rand() * (bz1 - bz0);
     if (nearRoad(x, z)) continue;
     q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rand() * Math.PI * 2);
     const roll = rand();
@@ -205,7 +208,7 @@ export function buildScene(track: Track) {
 
   /** Per frame: keep the sky centred on the camera and drift the motes around the player. */
   function update(camera: THREE.Camera, around: THREE.Vector3, dt: number, time: number) {
-    sky.position.copy(camera.position);
+    sky.position.set(camera.position.x, 0, camera.position.z); // ground level, so a high camera (the menu) looks down on the mountains
     for (let i = 0; i < MOTES; i++) {
       const o = i * 3;
       motePos[o + 1] += dt * (0.4 + (i % 5) * 0.12);

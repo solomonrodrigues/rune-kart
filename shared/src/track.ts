@@ -9,6 +9,7 @@ import { MeshBVH } from 'three-mesh-bvh';
 
 export interface TrackDef {
   name: string;
+  blurb?: string; // one line for the track picker
   points: [x: number, z: number, y: number][]; // closed loop, y = elevation
   width: number;
   wallHeight: number;
