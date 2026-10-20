@@ -22,4 +22,6 @@ Racing: press B / N in the lobby to add or remove bots, then everyone presses En
 
 Spells: your mana orb (bottom left) refills over time, faster while drifting and when you're behind. Keys 1–4 cast **Haste** (boost), **Smite** (forward projectile, spins out the kart it hits), **Snare** (a rune trap dropped behind you) and **Ward** (blocks the next hit). Costs and cooldowns live in `shared/src/spells.ts`.
 
-Controls: Enter to ready up, 1–4 to cast, hold C to look back, WASD / arrows to drive, Space or Shift to drift (hold while steering, release for a boost; sparks go blue → orange → purple).
+Sound: recorded CC0 effects from Kenney (`client/public/sfx`, see its LICENSE.txt) for the boost, spells and hits, plus a synthesised engine (a soft purr that rises with speed), cartoon drift "eee" with spark fizz, and countdown, lap and finish cues. It starts on your first key press or click; M mutes (remembered).
+
+Controls: Enter to ready up, 1–4 to cast, hold C to look back, M to mute, WASD / arrows to drive, Space or Shift to drift (hold while steering, release for a boost; sparks go blue → orange → purple).

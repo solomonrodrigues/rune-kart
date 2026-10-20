@@ -6,6 +6,7 @@ import { PORT } from 'shared/constants';
 import { createTrack } from 'shared/track';
 import { DEFAULT_TRACK, TRACKS } from 'shared/tracks';
 import { buildScene } from './scene';
+import { Sound } from './audio';
 
 const NAME_KEY = 'runekart.name';
 export function loadName() {
@@ -107,6 +108,7 @@ export function runMenu() {
       <dt>Space / Shift</dt><dd>Drift — hold through a corner; sparks go blue → orange → purple; release to boost</dd>
       <dt>1 2 3 4</dt><dd>Cast Haste, Smite, Snare, Ward — they cost mana, which refills over time</dd>
       <dt>C</dt><dd>Look back</dd>
+      <dt>M</dt><dd>Mute or unmute sound</dd>
       <dt>Enter</dt><dd>Ready up in the lobby</dd>
       <dt>Esc</dt><dd>Back to this menu</dd></dl>
       <div class="actions"><button data-go="main">Back</button></div>`,
@@ -133,9 +135,12 @@ export function runMenu() {
     if ((e.target as HTMLElement).id === 'player') saveName(player());
     if ((e.target as HTMLElement).id === 'private') priv = (e.target as HTMLInputElement).checked;
   });
+  const sound = new Sound();
   root.addEventListener('click', e => {
     const b = (e.target as HTMLElement).closest('button');
     if (!b) return;
+    sound.unlock();
+    sound.click();
     if (b.dataset.go === 'quick') go({ quick: true, player: player() || undefined });
     else if (b.dataset.go) render(b.dataset.go);
     if (b.dataset.track) { track = b.dataset.track; showTrack(track); root.querySelectorAll('.track').forEach(t => t.classList.toggle('on', t === b)); }

@@ -68,6 +68,9 @@ export class EffectsView {
   // always-on light costs ~0.5 ms a frame across the whole screen).
   private lights = [new THREE.PointLight(SMITE, 0, 14, 1.5)];
 
+  /** Called with the position of every smite that lands or fizzles (for its sound). */
+  onImpact: (at: THREE.Vector3) => void = () => {};
+
   constructor(private scene: THREE.Scene) {
     for (const l of this.lights) scene.add(l);
   }
@@ -84,6 +87,7 @@ export class EffectsView {
 
   /** Smite impact: a purple flash plus a ring. */
   private impact(p: THREE.Vector3) {
+    this.onImpact(p);
     const flash = new THREE.Mesh(flashGeo, new THREE.MeshBasicMaterial({ color: hdr(SMITE, 3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     flash.position.copy(p);
     this.scene.add(flash);

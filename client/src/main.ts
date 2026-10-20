@@ -9,6 +9,7 @@ import { TRACKS, trackDef } from 'shared/tracks';
 import { loadName, runMenu } from './menu';
 import { KartModel } from './KartModel';
 import { EffectsView } from './effects';
+import { Sound } from './audio';
 import { Minimap, type MapKart } from './minimap';
 import { fxCamera } from './arcane';
 import { deniedCast, renderSpells, setManaColour } from './spellUi';
@@ -98,6 +99,10 @@ resize();
 // --- Input ---
 const keys = new Set<string>();
 addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'Space') e.preventDefault(); });
+// Sound starts on the first key press or click (browser autoplay rules); M toggles mute.
+const sound = new Sound();
+for (const ev of ['keydown', 'pointerdown'] as const) addEventListener(ev, sound.unlock);
+addEventListener('keydown', e => { if (e.code === 'KeyM' && !e.repeat) sound.toggleMute(); });
 // Casts are edge-triggered: a key press queues one cast for the next physics step.
 let pendingCast = NO_CAST;
 addEventListener('keydown', e => {
@@ -259,12 +264,37 @@ onServerState = (server, ack) => {
 };
 
 // Live tuning/debugging from the console, e.g. KART.maxSpeed = 35
-Object.assign(window, { KART, MANA, me: local, correction, predictor, debug: { renderer, composer, scene, sun, headlight } });
+Object.assign(window, { KART, MANA, me: local, correction, predictor, debug: { renderer, composer, scene, sun, headlight, sound } });
 
 // --- Camera ---
 let camYaw = local.yaw;
 let finishCam = 0; // 0 normal chase cam → 1 swung round to the front after you finish
 const camPos = new THREE.Vector3(), lookAt = new THREE.Vector3(), focus = new THREE.Vector3();
+
+let lastTier = 0, lastBoost = 0, lastStun = 0;
+effects.onImpact = p => sound.impact(p.distanceTo(camera.position));
+
+// Race sounds: countdown beeps and GO, a chime each lap (a flourish for the last), a fanfare at the finish.
+let lastPhase = '', lastCount = 0, lastLapHeard = 0, finishedHeard = false;
+function raceSounds(now: number) {
+  if (!race) return;
+  const me = race.standings.find(s => s.id === myId);
+  if (race.phase === 'countdown') {
+    const n = Math.ceil(Math.max(0, race.timer - (now - race.at) / 1000));
+    if (n !== lastCount && n > 0) sound.countdown(false);
+    lastCount = n;
+  }
+  if (race.phase === 'racing' && lastPhase === 'countdown') sound.countdown(true);
+  if (race.phase === 'racing' && me?.racing) {
+    if (lastLapHeard && me.lap > lastLapHeard && me.finishTime < 0) sound.lap(me.lap === race.laps);
+    lastLapHeard = me.lap;
+    if (me.finishTime >= 0 && !finishedHeard) { sound.finish(); finishedHeard = true; }
+  } else {
+    lastLapHeard = 0;
+    if (race.phase !== 'results') finishedHeard = false;
+  }
+  lastPhase = race.phase;
+}
 
 let acc = 0;
 let last = performance.now();
@@ -288,7 +318,11 @@ renderer.setAnimationLoop(now => {
     send(predictor.step({ ...input, cast: tried }));
     pendingCast = NO_CAST;
     const spell = predictor.lastCast;
-    if (tried !== NO_CAST && !spell) deniedCast(tried);
+    if (tried !== NO_CAST && !spell) { deniedCast(tried); sound.denied(); }
+    if (spell) sound.spell(spell.id);
+    // A sudden loss of speed in one step (not from a spin-out) is a wall or a kart: thud.
+    const before = Math.hypot(localPrev.vx, localPrev.vz), after = Math.hypot(local.vx, local.vz);
+    if (before - after > 5 && local.stunTime <= 0) sound.wallHit(before - after);
     if (spell) {
       effects.burst(local.x, local.y, local.z, spell.color);
       const e = OFFLINE && spawnEffect(offlineFxId++, spell, 'local', local);
@@ -301,6 +335,15 @@ renderer.setAnimationLoop(now => {
     }
     acc -= DT;
   }
+
+  // Sounds driven by state changes (these can also arrive from the server: a stun, a server-side bump).
+  const tierNow = local.driftDir ? driftTier(local) : 0;
+  if (tierNow > lastTier) sound.driftTier(tierNow);
+  if (local.boostTime > lastBoost + 0.05) sound.boost(local.boostTier); // any boost: drift tier or Haste (0)
+  if (local.stunTime > 0 && lastStun <= 0) sound.hit();
+  lastTier = tierNow; lastBoost = local.boostTime; lastStun = local.stunTime;
+  sound.drive(kartSpeed(local), input.throttle, local.boostTime > 0, !!local.driftDir);
+  raceSounds(now);
 
   const decay = Math.exp(-dt / 0.1);
   correction.x *= decay; correction.y *= decay; correction.z *= decay; correction.yaw *= decay;
@@ -362,6 +405,6 @@ renderer.setAnimationLoop(now => {
     `<b>${Math.round(Math.abs(speed) * 3.6)}</b> km/h` +
     (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
     (k.boostTime > 0 ? ' · BOOST' : '') +
-    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells · C look back · Esc menu</small>`;
+    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells · C look back · M mute · Esc menu</small>`;
   composer.render(dt);
 });
