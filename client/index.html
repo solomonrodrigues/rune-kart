@@ -95,6 +95,50 @@
       #lapflash.show { animation: lap-sweep 2.2s ease forwards; }
       #lapflash.final { color: #ffcf7a; font-size: 76px; text-shadow: 0 0 24px #ff7a2a, 0 0 48px #ff3d1a88, 0 4px 10px #000; }
       @keyframes lap-sweep { 0% { transform: translateX(60vw); opacity: 0; } 15%, 75% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(-60vw); opacity: 0; } }
+      /* Lobby panel (inside the banner). */
+      #banner .lobby { min-width: 300px; padding: 14px 20px 12px; background: var(--panel); border-radius: 6px; box-shadow: 0 0 0 2px #121117, 0 0 0 4px var(--iron), 0 8px 24px #000c; }
+      #banner .lobby ul { list-style: none; margin: 6px 0 10px; padding: 0; text-align: left; font-size: 16px; font-weight: 400; }
+      #banner .lobby li { display: flex; align-items: center; gap: 4px; padding: 3px 0; border-bottom: 1px solid #ffffff10; }
+      #banner .lobby li.me { color: #ffd98a; }
+      #banner .lobby li em { font-size: 12px; color: #9a8d72; }
+      #banner .lobby .tick { margin-left: auto; color: #7dffb0; }
+      #banner .lobby .prompt { font-size: 18px; margin: 6px 0; }
+      #banner .lobby .code { font-family: ui-monospace, monospace; letter-spacing: .08em; color: #f3e3b3; user-select: all; pointer-events: auto; }
+
+      /* Main menu: a dark tome on the left over a slow orbit of the selected track. */
+      body.in-menu #hud, body.in-menu #spells, body.in-menu #minimap, body.in-menu #place, body.in-menu #lapflash, body.in-menu #banner { display: none; }
+      .menu-bg { position: fixed; inset: 0; z-index: 0; }
+      #menu { position: fixed; inset: 0; z-index: 1; display: flex; align-items: center; padding: 24px 48px; background: linear-gradient(90deg, #07050cee 0, #07050cb0 38%, #07050c00 70%); color: var(--gold); font-family: var(--serif); overflow-y: auto; }
+      #menu .panel { width: min(440px, 100%); }
+      #menu h1 { margin: 0; font-size: 64px; font-variant: small-caps; letter-spacing: .06em; color: #f3e3b3; text-shadow: 0 0 28px #a77bffaa, 0 4px 12px #000; }
+      #menu h2 { margin: 0 0 16px; font-size: 32px; font-variant: small-caps; letter-spacing: .05em; color: #f3e3b3; text-shadow: 0 0 18px #a77bff88; }
+      #menu .tag { margin: 2px 0 22px; color: #b9a982; font-style: italic; }
+      #menu button { font: inherit; color: var(--gold); cursor: pointer; border: 0; border-radius: 5px; background: linear-gradient(#2a2430, #16121b); box-shadow: inset 0 1px 0 #ffffff12, 0 0 0 2px #121117, 0 0 0 3px var(--iron); padding: 10px 16px; text-align: left; transition: box-shadow .15s, transform .15s; }
+      #menu button:hover, #menu button:focus-visible { outline: none; box-shadow: inset 0 1px 0 #ffffff12, 0 0 0 2px #121117, 0 0 0 3px #a77bff, 0 0 14px #a77bff66; transform: translateX(3px); }
+      #menu button.primary { background: linear-gradient(#3b2a58, #1e1430); }
+      #menu button small { display: block; font-size: 13px; color: #a9997a; margin-top: 2px; }
+      #menu nav { display: grid; gap: 12px; }
+      #menu nav button { font-size: 21px; font-variant: small-caps; letter-spacing: .04em; }
+      #menu .name { display: grid; gap: 6px; margin-bottom: 20px; font-size: 14px; color: #b9a982; }
+      #menu input { font: 18px var(--serif); color: #f3e3b3; background: #0b0910cc; border: 0; border-radius: 4px; padding: 9px 12px; box-shadow: inset 0 2px 6px #000, 0 0 0 1px #57575f; }
+      #menu input:focus { outline: none; box-shadow: inset 0 2px 6px #000, 0 0 0 2px #a77bff; }
+      #menu .tracks { display: grid; gap: 10px; margin-bottom: 16px; }
+      #menu .track.on { box-shadow: inset 0 1px 0 #ffffff12, 0 0 0 2px #121117, 0 0 0 3px #e8b64c, 0 0 12px #e8b64c55; }
+      #menu .track b { font-size: 19px; font-variant: small-caps; }
+      #menu .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+      #menu .row > span { min-width: 60px; color: #b9a982; }
+      #menu .row .laps { min-width: 24px; text-align: center; font-size: 22px; }
+      #menu .row button { padding: 4px 14px; text-align: center; }
+      #menu .check { cursor: pointer; color: #cdbb8f; }
+      #menu .check input { width: 18px; height: 18px; accent-color: #a77bff; }
+      #menu .code input { flex: 1; min-width: 0; text-transform: none; }
+      #menu .lobbies { display: grid; gap: 10px; max-height: 46vh; overflow-y: auto; padding: 4px; }
+      #menu .empty { color: #a9997a; font-style: italic; }
+      #menu .actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; }
+      #menu .keys { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0 0 8px; }
+      #menu .keys dt { color: #f3e3b3; font-weight: 700; white-space: nowrap; }
+      #menu .keys dd { margin: 0; color: #cdbb8f; }
+      @media (max-width: 640px) { #menu { padding: 16px; background: #07050cd9; } #menu h1 { font-size: 46px; } #menu nav button { font-size: 18px; } }
       @media (max-width: 560px) { #minimap { width: 112px; height: 112px; } #place { font-size: 52px; } #place small { font-size: 22px; } #lapflash { font-size: 40px; } #lapflash.final { font-size: 46px; } }
       @media (max-width: 560px) { #spells { gap: 8px; } #spells .orb { width: 76px; height: 76px; } #spells .bar { gap: 6px; padding-right: 10px; } #spells .spell { width: 46px; } #spells .slot { width: 42px; height: 50px; } #spells .slot svg { width: 22px; height: 22px; margin-top: 12px; } #spells .spell .cost { top: 39px; } #spells .spell b { font-size: 10px; } }
     </style>

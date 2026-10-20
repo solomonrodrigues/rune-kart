@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { Client } from 'colyseus.js';
+import { Client, type Room } from 'colyseus.js';
 import { PORT, ROOM_NAME } from 'shared/constants';
 import { DT, KART, copyKart, driftTier, kartSpeed, newKart, type KartInput, type KartState } from 'shared/kart';
 import { Predictor, type SeqInput } from 'shared/prediction';
 import { createTrack, spawnPoint } from 'shared/track';
 import { autopilot } from 'shared/race';
-import { GREYBOX } from 'shared/tracks';
+import { TRACKS, trackDef } from 'shared/tracks';
+import { loadName, runMenu } from './menu';
 import { KartModel } from './KartModel';
 import { EffectsView } from './effects';
 import { Minimap, type MapKart } from './minimap';
@@ -21,8 +22,43 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { renderRace, type RaceView, type Standing } from './raceUi';
 
-const OFFLINE = new URLSearchParams(location.search).has('offline');
 const hud = document.getElementById('hud')!;
+const params = new URLSearchParams(location.search);
+const esc = (s: string) => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+
+// Which screen: the main menu (no params), practice (solo, no server), or an online lobby.
+type Mode = 'menu' | 'practice' | 'quick' | 'host' | 'join';
+const MODE: Mode = params.has('offline') || params.has('practice') ? 'practice'
+  : params.has('host') ? 'host' : params.has('join') ? 'join'
+  : params.has('quick') || params.has('autopilot') ? 'quick' : 'menu';
+const OFFLINE = MODE === 'practice';
+if (MODE === 'menu') {
+  runMenu();
+  await new Promise(() => {}); // the menu owns the page; choosing something navigates to a game URL
+}
+
+// Online: connect before building anything, because the room decides the track.
+let joined: Room<any> | null = null;
+if (!OFFLINE) {
+  // Dev: Vite serves the page, so the game server is on its own port. Prod: same origin.
+  const wsUrl = import.meta.env.DEV ? `ws://${location.hostname}:${PORT}` : location.origin.replace(/^http/, 'ws');
+  const client = new Client(wsUrl);
+  const opts = {
+    player: params.get('player') || loadName() || undefined,
+    track: params.get('track') ?? undefined, laps: Number(params.get('laps')) || undefined,
+    lobby: params.get('lobby') ?? undefined, private: params.has('private'),
+  };
+  joined = await (MODE === 'host' ? client.create(ROOM_NAME, opts)
+    : MODE === 'join' ? client.joinById(params.get('join')!, opts)
+    : client.joinOrCreate(ROOM_NAME, opts)).catch(err => {
+    hud.innerHTML = `Couldn’t join: ${esc(err.message ?? String(err))}. <a href="/">Back to the menu</a>`;
+    throw err;
+  });
+  // The address bar now holds a link to this room: refresh to rejoin, or send it to a friend.
+  history.replaceState(null, '', `?join=${joined.roomId}${params.has('autopilot') ? '&autopilot' : ''}`);
+  await new Promise<void>(r => { const c = () => (joined!.state.track ? r() : joined!.onStateChange.once(c)); c(); });
+}
+addEventListener('keydown', e => { if (e.code === 'Escape') { joined?.leave(); location.search = ''; } });
 
 // --- Renderer / scene ---
 // No canvas MSAA: everything goes through the composer below, which antialiases with FXAA instead.
@@ -33,7 +69,7 @@ renderer.shadowMap.enabled = true;
 renderer.localClippingEnabled = true; // mana tanks clip their liquid to the mana level
 document.body.appendChild(renderer.domElement);
 
-const track = createTrack(GREYBOX);
+const track = createTrack(trackDef(joined ? joined.state.track : params.get('track')));
 const { scene, sun, update: updateScene } = buildScene(track);
 const effects = new EffectsView(scene);
 const minimap = new Minimap(track);
@@ -116,7 +152,6 @@ function sampleRemote(r: Remote, t: number): KartState {
 }
 
 // --- Local kart: predicted every fixed step, reconciled against the server when online ---
-const params = new URLSearchParams(location.search);
 // ?lag=ms simulates a round trip on localhost: half on the way out, half on the way back.
 const LAG = Math.max(0, Number(params.get('lag')) || 0);
 // ?autopilot drives for you the whole time — for testing races solo.
@@ -133,12 +168,7 @@ let myColor = 0xe84a3c;
 let onServerState = (_: KartState, __: number) => {};
 
 if (!OFFLINE) {
-  // Dev: Vite serves the page, so the game server is on its own port. Prod: same origin.
-  const wsUrl = import.meta.env.DEV ? `ws://${location.hostname}:${PORT}` : location.origin.replace(/^http/, 'ws');
-  const room = await new Client(wsUrl).joinOrCreate<any>(ROOM_NAME).catch(err => {
-    hud.textContent = `Could not connect to ${wsUrl}: ${err.message ?? err}. Add ?offline to drive solo.`;
-    throw err;
-  });
+  const room = joined!;
   let connected = true;
   room.onLeave(() => { connected = false; notice = 'Disconnected from server — reload to rejoin.<br>'; });
   myId = room.sessionId;
@@ -152,7 +182,9 @@ if (!OFFLINE) {
   addEventListener('keydown', e => {
     const me = race?.standings.find(s => s.id === myId);
     if (e.code === 'Enter' && race?.phase === 'lobby' && connected) room.send('ready', !me?.ready);
+    // Host controls (the server ignores them from anyone else): bots and laps.
     if ((e.code === 'KeyB' || e.code === 'KeyN') && !e.repeat && race?.phase === 'lobby' && connected) room.send('bots', e.code === 'KeyB' ? 1 : -1);
+    if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && !e.repeat && race?.phase === 'lobby' && connected) room.send('laps', e.code === 'BracketRight' ? 1 : -1);
   });
   send = input => delayed(() => { if (connected) room.send('input', input); });
 
@@ -170,9 +202,9 @@ if (!OFFLINE) {
     const standings: Standing[] = [];
     state.karts.forEach((k: any, id: string) => {
       snap.push([id, copyKart(newKart(k), k), k.ack, k.color]);
-      standings.push({ id, color: k.color, place: k.place, finishTime: k.finishTime, lap: k.lap, racing: k.racing, ready: k.ready, bot: k.bot });
+      standings.push({ id, color: k.color, place: k.place, finishTime: k.finishTime, lap: k.lap, racing: k.racing, ready: k.ready, bot: k.bot, name: k.name });
     });
-    const view = { phase: state.phase, timer: state.timer, laps: state.laps, standings };
+    const view = { phase: state.phase, timer: state.timer, laps: state.laps, standings, host: state.host, trackName: TRACKS[state.track]?.name ?? '', code: room.roomId };
     const fx: Effect[] = [];
     state.effects.forEach((e: any) => fx.push({ id: e.id, kind: e.kind, owner: e.owner, x: e.x, y: e.y, z: e.z, vx: e.vx, vz: e.vz, age: e.age, target: e.target }));
     delayed(() => {
@@ -330,6 +362,6 @@ renderer.setAnimationLoop(now => {
     `<b>${Math.round(Math.abs(speed) * 3.6)}</b> km/h` +
     (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
     (k.boostTime > 0 ? ' · BOOST' : '') +
-    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells · C look back</small>`;
+    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells · C look back · Esc menu</small>`;
   composer.render(dt);
 });

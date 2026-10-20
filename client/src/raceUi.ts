@@ -1,9 +1,13 @@
 // Race overlay: the big centre banner (lobby prompt, countdown, results), the lap/time HUD line,
 // the big placing in the corner, and the Mario Kart-style lap banner.
-export interface Standing { id: string; color: number; place: number; finishTime: number; lap: number; racing: boolean; ready: boolean; bot: boolean }
-export interface RaceView { phase: 'lobby' | 'countdown' | 'racing' | 'results'; timer: number; laps: number; at: number; standings: Standing[] }
+export interface Standing { id: string; color: number; place: number; finishTime: number; lap: number; racing: boolean; ready: boolean; bot: boolean; name: string }
+export interface RaceView {
+  phase: 'lobby' | 'countdown' | 'racing' | 'results'; timer: number; laps: number; at: number; standings: Standing[];
+  host: string; trackName: string; code: string;
+}
 
 const el = document.getElementById('banner')!;
+const esc = (s: string) => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const swatch = (c: number) => `<i style="background:#${c.toString(16).padStart(6, '0')}"></i>`;
 export const formatTime = (s: number) =>
   `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
@@ -54,12 +58,22 @@ export function renderRace(v: RaceView | null, myId: string, now: number, joinHi
 
   switch (v.phase) {
     case 'lobby': {
-      const humans = v.standings.filter(s => !s.bot), bots = v.standings.length - humans.length;
-      const ready = humans.filter(s => s.ready).length;
-      show(`<p>${me?.ready ? 'Ready — waiting for the others' : 'Press <kbd>Enter</kbd> to ready up'}</p>` +
-        `<small>${ready}/${humans.length} ready · ${v.laps} laps · ${bots} bot${bots === 1 ? '' : 's'}</small>` +
-        `<br><small><kbd>B</kbd> add a bot · <kbd>N</kbd> remove one</small>` +
-        (joinHint ? `<br><small>${joinHint}</small>` : ''));
+      // Lobby panel: track and laps, the racers (host crowned, ready ticked), the room code to share,
+      // and the host's controls.
+      const isHost = v.host === myId;
+      const hostName = v.standings.find(s => s.id === v.host)?.name ?? 'the host';
+      const racersHtml = v.standings.map(s =>
+        `<li${s.id === myId ? ' class="me"' : ''}>${swatch(s.color)}${esc(s.name || 'Racer')}` +
+        `${s.id === v.host ? ' <span title="Host">♛</span>' : ''}${s.bot ? ' <em>bot</em>' : ''}` +
+        `<span class="tick">${s.bot ? '' : s.ready ? '✓' : '…'}</span></li>`).join('');
+      show(`<div class="lobby"><p>${esc(v.trackName)} <small>· ${v.laps} lap${v.laps === 1 ? '' : 's'}</small></p>` +
+        `<ul>${racersHtml}</ul>` +
+        `<p class="prompt">${me?.ready ? 'Ready — waiting for the others' : 'Press <kbd>Enter</kbd> to ready up'}</p>` +
+        (isHost
+          ? `<small><kbd>B</kbd> / <kbd>N</kbd> add or remove a bot · <kbd>[</kbd> / <kbd>]</kbd> fewer or more laps</small>`
+          : `<small>${esc(hostName)} sets the bots and laps</small>`) +
+        `<br><small>Room code <b class="code">${esc(v.code)}</b> — or share this page’s link · <kbd>Esc</kbd> leave</small>` +
+        (joinHint ? `<br><small>${esc(joinHint)}</small>` : '') + '</div>');
       return '';
     }
     case 'countdown':
@@ -75,7 +89,7 @@ export function renderRace(v: RaceView | null, myId: string, now: number, joinHi
     case 'results':
       show('<p>Results</p><table>' +
         [...racers].sort((a, b) => a.place - b.place).map(s =>
-          `<tr${s.id === myId ? ' class="me"' : ''}><td>P${s.place}</td><td>${swatch(s.color)}${s.id === myId ? 'You' : s.bot ? 'Bot' : ''}</td>` +
+          `<tr${s.id === myId ? ' class="me"' : ''}><td>${ordinal(s.place)}</td><td>${swatch(s.color)}${esc(s.name || 'Racer')}${s.id === myId ? ' (you)' : ''}</td>` +
           `<td>${s.finishTime >= 0 ? formatTime(s.finishTime) : 'DNF'}</td></tr>`).join('') +
         `</table><small>Next race in ${Math.ceil(timer)}s</small>`);
       return '';

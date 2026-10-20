@@ -12,7 +12,9 @@ LAN play from Docker: friends open `http://<your-ip>:2567` in a browser. Start w
 
 Desktop app (optional, for hosting without Docker): `npm run desktop` runs it; `npm run desktop:mac` / `desktop:win` build a DMG / portable .exe into `release/` (first `npm install --prefix electron`). It hosts the same server and shows your LAN address in the lobby; friends can join from the app or any browser.
 
-Open `/?offline` to drive solo with the sim running locally (no network). In offline mode the console exposes `KART` and `MANA` (live tuning, e.g. `KART.maxSpeed = 35`, `MANA.smite.turnRate = 3`) and `me` (your kart state).
+Open the game at `/` for the main menu: **Quick Race** (join an open lobby or start one), **Host Lobby** (pick a track — Moonlit Loop, Hollow Crown or Serpent's Pass — laps, public/private), **Join Lobby** (browse open lobbies or enter a room code), **Practice** and **How to Play**. Your name is remembered. In a lobby the host adds bots (B / N) and sets laps ([ / ]); the address bar holds a link to the room you can share; Esc leaves to the menu. Game URLs work directly too: `/?quick`, `/?host&track=hollow&laps=3`, `/?join=<code>`, `/?practice&track=serpent`. New tracks go in `shared/src/tracks.ts` and are tested automatically.
+
+Open `/?offline` (or `/?practice`) to drive solo with the sim running locally (no network). In offline mode the console exposes `KART` and `MANA` (live tuning, e.g. `KART.maxSpeed = 35`, `MANA.smite.turnRate = 3`) and `me` (your kart state).
 
 Online, your kart is predicted locally and reconciled against the server; other karts are drawn 100 ms in the past between server snapshots. Add `?lag=150` to simulate a 150 ms round trip on localhost.
 
