@@ -26,8 +26,9 @@ function pool(geo: THREE.BufferGeometry, mat: THREE.Material, max: number) {
 /** A circle of ground kept free of trees and rocks. */
 export interface Reserved { x: number; z: number; r: number }
 
-export function buildDressing(track: Track, rand: () => number, clear: (x: number, z: number, margin: number) => boolean) {
-  const objects: THREE.Object3D[] = [], reserved: Reserved[] = [];
+export function buildDressing(track: Track, rand: () => number, clear: (x: number, z: number, margin: number) => boolean, taken: Reserved[] = []) {
+  const objects: THREE.Object3D[] = [], reserved: Reserved[] = [...taken]; // starts with what's already there (landmarks)
+  const free = (s: { x: number; z: number }, r: number) => !taken.some(t => (t.x - s.x) ** 2 + (t.z - s.z) ** 2 < (t.r + r) ** 2);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
   const { samples } = track, half = track.def.width / 2;
   const xs = samples.map(s => s.x), zs = samples.map(s => s.z);
@@ -109,7 +110,7 @@ export function buildDressing(track: Track, rand: () => number, clear: (x: numbe
 
   // --- Gibbets: a post and arm on the outside of a few corners, an iron cage (and its occupant) swaying below ---
   const gibbetSpots = roadside(track, { step: 4, offset: half + 7, where: 'corners', start: 2 })
-    .filter((s, i) => i % 3 === 0 && s.y < 1.5).slice(0, 8);
+    .filter((s, i) => i % 3 === 0 && s.y < 1.5 && free(s, 3)).slice(0, 8);
   const frame = pool(merge([
     new THREE.BoxGeometry(0.25, 4.8, 0.25).translate(0, 2.4, 0),
     new THREE.BoxGeometry(1.7, 0.2, 0.2).translate(0.75, 4.6, 0),
@@ -142,7 +143,7 @@ export function buildDressing(track: Track, rand: () => number, clear: (x: numbe
   // --- Rune banners: tall poles in pairs along the straights, tattered crimson cloth with a gold sigil ---
   const bannerSpots: ReturnType<typeof roadside> = [];
   for (const s of roadside(track, { step: 3, offset: half + 3, where: 'straights' })) // in pairs, ≥ 30 m apart along the road
-    if (bannerSpots.length < 20 && !bannerSpots.some(b => (b.x - s.x) ** 2 + (b.z - s.z) ** 2 < 30 ** 2)) bannerSpots.push(s);
+    if (bannerSpots.length < 20 && free(s, 1.5) && !bannerSpots.some(b => (b.x - s.x) ** 2 + (b.z - s.z) ** 2 < 30 ** 2)) bannerSpots.push(s);
   const poleMesh = pool(new THREE.CylinderGeometry(0.08, 0.12, 1, 5).translate(0, 0.5, 0), flat(IRON), bannerSpots.length);
   const bar = pool(new THREE.BoxGeometry(0.06, 0.06, 1.3), flat(IRON), bannerSpots.length);
   const CW = 1.1, CH = 2.2, GX = 4, GY = 8; // cloth size and grid

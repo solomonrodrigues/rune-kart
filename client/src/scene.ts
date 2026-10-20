@@ -4,6 +4,7 @@ import type { Track } from 'shared/track';
 import { buildMountains } from './mountains';
 import { buildBraziers, buildCrows, buildLightning, buildMist } from './atmosphere';
 import { buildDressing } from './dressing';
+import { buildLandmarks } from './landmarks';
 
 // Dark fantasy palette: a moonlit dusk, cold stone, and runes and crystals that glow (bloom picks them up).
 const HORIZON = 0x3a2846;
@@ -146,8 +147,12 @@ export function buildScene(track: Track) {
   const clearance = half + 5;
   const nearRoad = (x: number, z: number) => samples.some(s => (s.x - x) ** 2 + (s.z - z) ** 2 < clearance * clearance);
 
-  // Set dressing (graveyards, gibbets, banners, ruins) goes down first; the scatter below keeps clear of it.
-  const dressing = buildDressing(track, rand, (x, z, r) => !samples.some(s => (s.x - x) ** 2 + (s.z - z) ** 2 < (clearance + r) ** 2));
+  // This track's landmark, then set dressing (graveyards, gibbets, banners, ruins) around it; the scatter below
+  // keeps clear of both.
+  const clearOfRoad = (x: number, z: number, r: number) => !samples.some(s => (s.x - x) ** 2 + (s.z - z) ** 2 < (clearance + r) ** 2);
+  const landmarks = buildLandmarks(track, clearOfRoad);
+  scene.add(...landmarks.objects);
+  const dressing = buildDressing(track, rand, clearOfRoad, landmarks.reserved);
   scene.add(...dressing.objects);
   const taken = (x: number, z: number) => dressing.reserved.some(r => (r.x - x) ** 2 + (r.z - z) ** 2 < (r.r + 1.5) ** 2);
 
