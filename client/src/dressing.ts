@@ -161,7 +161,7 @@ export function buildDressing(track: Track, rand: () => number, clear: (x: numbe
     // see it head-on as you approach; it hangs from a crossbar, just in front of the pole.
     place(bar, s.x, top, s.z, 0, s.yaw + Math.PI / 2, 0);
     reserved.push({ x: s.x, z: s.z, r: 1.5 });
-    const g = cloth.clone().rotateY(s.yaw).translate(s.x - Math.sin(s.yaw) * 0.15, top - 0.05, s.z - Math.cos(s.yaw) * 0.15);
+    const g = cloth.clone().rotateY(s.yaw).translate(s.x - Math.sin(s.yaw) * 0.2, top - 0.05, s.z - Math.cos(s.yaw) * 0.2);
     bannerBase.push(new Float32Array(g.attributes.position.array));
     return g;
   });
@@ -223,7 +223,8 @@ export function buildDressing(track: Track, rand: () => number, clear: (x: numbe
         const s = bannerSpots[b], nx = Math.sin(s.yaw), nz = Math.cos(s.yaw); // the cloth's normal: along the road
         for (let v = 0; v < vertsPer; v++) {
           const o = v * 3, depth = (s.y + 5.55 - base[o + 1]) / CH; // 0 at the crossbar, 1 at the hem
-          const wave = Math.sin(time * 2.6 + depth * 3.2 + b * 1.7) * 0.22 * depth;
+          // Billows only forward, away from the pole it hangs in front of, so it never swings back through it.
+          const wave = -(0.5 + 0.5 * Math.sin(time * 2.6 + depth * 3.2 + b * 1.7)) * 0.25 * depth;
           pos.setXYZ(b * vertsPer + v, base[o] + nx * wave, base[o + 1], base[o + 2] + nz * wave);
         }
       });
