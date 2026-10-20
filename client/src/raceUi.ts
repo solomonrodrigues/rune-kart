@@ -11,7 +11,7 @@ let lastHtml = '';
 const show = (html: string) => { if (html !== lastHtml) el.innerHTML = lastHtml = html; };
 
 /** Updates the banner and returns the HUD line for the local racer. */
-export function renderRace(v: RaceView | null, myId: string, now: number): string {
+export function renderRace(v: RaceView | null, myId: string, now: number, joinHint = ''): string {
   if (!v) { show(''); return ''; }
   const elapsed = (now - v.at) / 1000;
   const timer = v.phase === 'racing' ? v.timer + elapsed : Math.max(0, v.timer - elapsed);
@@ -22,7 +22,8 @@ export function renderRace(v: RaceView | null, myId: string, now: number): strin
     case 'lobby': {
       const ready = v.standings.filter(s => s.ready).length;
       show(`<p>${me?.ready ? 'Ready — waiting for the others' : 'Press <kbd>Enter</kbd> to ready up'}</p>` +
-        `<small>${ready}/${v.standings.length} ready · ${v.laps} laps</small>`);
+        `<small>${ready}/${v.standings.length} ready · ${v.laps} laps</small>` +
+        (joinHint ? `<br><small>${joinHint}</small>` : ''));
       return '';
     }
     case 'countdown':

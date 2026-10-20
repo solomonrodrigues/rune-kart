@@ -8,6 +8,10 @@ npm install && npm run dev     # hot-reload dev: Vite on :5173, server on :2567 
 npm test                       # shared sim tests
 ```
 
+LAN play from Docker: friends open `http://<your-ip>:2567` in a browser. Start with `PUBLIC_ADDRESS=<your-ip>:2567 docker compose up -d` to show that address in the lobby.
+
+Desktop app (optional, for hosting without Docker): `npm run desktop` runs it; `npm run desktop:mac` / `desktop:win` build a DMG / portable .exe into `release/` (first `npm install --prefix electron`). It hosts the same server and shows your LAN address in the lobby; friends can join from the app or any browser.
+
 Open `/?offline` to drive solo with the sim running locally (no network). In offline mode the console exposes `KART` (live tuning, e.g. `KART.maxSpeed = 35`) and `me` (your kart state).
 
 Online, your kart is predicted locally and reconciled against the server; other karts are drawn 100 ms in the past between server snapshots. Add `?lag=150` to simulate a 150 ms round trip on localhost.

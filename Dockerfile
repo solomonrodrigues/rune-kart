@@ -13,7 +13,7 @@ FROM node:22-alpine
 WORKDIR /app
 COPY --from=build /app/server/dist server/dist
 COPY --from=build /app/client/dist client/dist
-ENV NODE_ENV=production
+ENV NODE_ENV=production ADVERTISE_LAN=0
 EXPOSE 2567
 USER node
 CMD ["node", "server/dist/index.js"]

@@ -98,6 +98,7 @@ const delayed = (fn: () => void) => (LAG ? setTimeout(fn, LAG / 2) : fn());
 let notice = ''; // shown above the HUD, e.g. on disconnect
 let race: RaceView | null = null; // latest race state (online only)
 let myId = '';
+let joinHint = '';
 let send = (_: SeqInput) => {};
 let start: KartState = newKart(spawnPoint(track, 0));
 let myColor = 0xe84a3c;
@@ -113,6 +114,13 @@ if (!OFFLINE) {
   let connected = true;
   room.onLeave(() => { connected = false; notice = 'Disconnected from server — reload to rejoin.<br>'; });
   myId = room.sessionId;
+  // Hosting on this machine: show the LAN address friends can join at.
+  if (['localhost', '127.0.0.1'].includes(location.hostname)) {
+    const base = import.meta.env.DEV ? `http://${location.hostname}:${PORT}` : '';
+    fetch(`${base}/api/server-info`).then(r => r.json()).then(({ addresses }: { addresses: string[] }) => {
+      if (addresses.length) joinHint = `Friends join at ${addresses.join(' or ')}`;
+    }).catch(() => {});
+  }
   addEventListener('keydown', e => {
     const me = race?.standings.find(s => s.id === myId);
     if (e.code === 'Enter' && race?.phase === 'lobby' && connected) room.send('ready', !me?.ready);
@@ -244,7 +252,7 @@ renderer.setAnimationLoop(now => {
 
   const tier = driftTier(k);
   const racers = remotes.size + 1;
-  const raceLine = renderRace(race, myId, now);
+  const raceLine = renderRace(race, myId, now, joinHint);
   hud.innerHTML = notice + (raceLine ? `<b>${raceLine}</b><br>` : '') +
     `<b>${Math.round(Math.abs(speed) * 3.6)}</b> km/h` +
     (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
