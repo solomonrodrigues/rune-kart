@@ -17,9 +17,9 @@ export interface Spell {
 
 // Balancing happens here. The order is the loadout: keys 1–4.
 export const SPELLS: Spell[] = [
-  { id: 'surge', name: 'Surge', cost: 30, cooldown: 1.5, kind: 'self', color: 0x4fc3ff },
-  { id: 'bolt', name: 'Arcane Bolt', cost: 40, cooldown: 1.0, kind: 'projectile', color: 0xd65cff },
-  { id: 'rune', name: 'Rune Trap', cost: 35, cooldown: 2.0, kind: 'dropped', color: 0xff9d2e },
+  { id: 'surge', name: 'Haste', cost: 30, cooldown: 1.5, kind: 'self', color: 0x4fc3ff },
+  { id: 'bolt', name: 'Smite', cost: 40, cooldown: 1.0, kind: 'projectile', color: 0xd65cff },
+  { id: 'rune', name: 'Snare', cost: 35, cooldown: 2.0, kind: 'dropped', color: 0xff9d2e },
   { id: 'ward', name: 'Ward', cost: 45, cooldown: 4.0, kind: 'self', color: 0x7dffb0 },
 ];
 

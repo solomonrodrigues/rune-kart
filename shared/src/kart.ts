@@ -22,7 +22,7 @@ export interface KartState {
   driftCharge: number;
   driftHeld: number;  // last tick's drift button, for edge detection
   boostTime: number;
-  boostTier: number;  // drift tier (1–3) behind the current boost, 0 for a Surge — colours the flame
+  boostTier: number;  // drift tier (1–3) behind the current boost, 0 for Haste — colours the flame
   steer: number;      // smoothed steering actually applied (input eases in, so keyboards aren't twitchy)
   mana: number;
   manaRegenMul: number; // set by the server from race position (catch-up), 1 otherwise

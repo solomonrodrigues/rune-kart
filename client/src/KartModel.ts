@@ -176,7 +176,7 @@ export class KartModel {
 
     const boost = Math.min(1, k.boostTime / KART.boostTimes[0]);
     this.flame.visible = boost > 0;
-    // The flame burns the colour of the sparks it was released on (Surge has its own).
+    // The flame burns the colour of the sparks it was released on (Haste has its own).
     (this.flame.material as THREE.MeshBasicMaterial).color.copy(k.boostTier ? TIER[k.boostTier] : SURGE);
     this.flame.scale.set(1, 1, boost * (0.8 + 0.4 * Math.abs(Math.sin(time * 30))));
   }
