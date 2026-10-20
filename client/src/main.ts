@@ -6,6 +6,9 @@ import { Predictor, type SeqInput } from 'shared/prediction';
 import { createTrack, spawnPoint } from 'shared/track';
 import { GREYBOX } from 'shared/tracks';
 import { KartModel } from './KartModel';
+import { EffectsView } from './effects';
+import { renderSpells } from './spellUi';
+import { NO_CAST, SPELLS, spawnEffect, stepEffects, type Effect } from 'shared/spells';
 import { buildScene } from './scene';
 import { renderRace, type RaceView, type Standing } from './raceUi';
 
@@ -20,6 +23,7 @@ document.body.appendChild(renderer.domElement);
 
 const track = createTrack(GREYBOX);
 const { scene, sun } = buildScene(track);
+const effects = new EffectsView(scene);
 const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 600);
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
@@ -32,6 +36,12 @@ resize();
 // --- Input ---
 const keys = new Set<string>();
 addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'Space') e.preventDefault(); });
+// Casts are edge-triggered: a key press queues one cast for the next physics step.
+let pendingCast = NO_CAST;
+addEventListener('keydown', e => {
+  const slot = Number(e.key) - 1;
+  if (!e.repeat && Number.isInteger(slot) && slot >= 0 && slot < SPELLS.length) pendingCast = slot;
+});
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 const axis = (neg: string[], pos: string[]) =>
@@ -126,9 +136,12 @@ if (!OFFLINE) {
       standings.push({ id, color: k.color, place: k.place, finishTime: k.finishTime, lap: k.lap, racing: k.racing, ready: k.ready });
     });
     const view = { phase: state.phase, timer: state.timer, laps: state.laps, standings };
+    const fx: Effect[] = [];
+    state.effects.forEach((e: any) => fx.push({ id: e.id, kind: e.kind, owner: e.owner, x: e.x, y: e.y, z: e.z, vx: e.vx, vz: e.vz, age: e.age }));
     delayed(() => {
       const now = performance.now();
       race = { ...view, at: now };
+      effects.set(fx, now);
       for (const [id, s, ack, color] of snap) {
         if (id === room.sessionId) { onServerState(s, ack); continue; }
         let r = remotes.get(id);
@@ -147,6 +160,9 @@ if (!OFFLINE) {
 }
 
 const predictor = new Predictor(start, track);
+// Offline there's no server, so bolts and runes are simulated here (you can trip your own runes).
+const offlineFx: Effect[] = [];
+let offlineFxId = 1;
 const local = predictor.state;
 const localPrev = copyKart(newKart(local), local); // state one step back, for render interpolation
 const localView = newKart(local); // scratch: the local kart as drawn
@@ -177,12 +193,25 @@ renderer.setAnimationLoop(now => {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   // Frozen on the grid during the countdown (the server enforces this too).
-  const input = race?.phase === 'countdown' ? { steer: 0, throttle: 0, drift: false } : readInput();
+  const frozen = race?.phase === 'countdown';
+  const input = frozen ? { steer: 0, throttle: 0, drift: false } : readInput();
 
   acc = Math.min(acc + dt, 0.25);
   while (acc >= DT) {
     copyKart(localPrev, local);
-    send(predictor.step(input));
+    send(predictor.step({ ...input, cast: frozen ? NO_CAST : pendingCast }));
+    pendingCast = NO_CAST;
+    const spell = predictor.lastCast;
+    if (spell) {
+      effects.burst(local.x, local.y, local.z, spell.color);
+      const e = OFFLINE && spawnEffect(offlineFxId++, spell, 'local', local);
+      if (e) offlineFx.push(e);
+    }
+    if (OFFLINE) {
+      const dead = stepEffects(offlineFx, [['local', local]], track, DT);
+      if (dead.size) offlineFx.splice(0, offlineFx.length, ...offlineFx.filter(e => !dead.has(e)));
+      effects.set(offlineFx, now);
+    }
     acc -= DT;
   }
 
@@ -191,6 +220,8 @@ renderer.setAnimationLoop(now => {
   const k = lerpKart(localView, localPrev, local, acc / DT);
   k.x += correction.x; k.y += correction.y; k.z += correction.z; k.yaw += correction.yaw;
   localModel.update(k, dt, now / 1000);
+  effects.update(now, dt);
+  renderSpells(local);
 
   const renderT = now - INTERP_DELAY;
   for (const r of remotes.values()) r.model.update(sampleRemote(r, renderT), dt, now / 1000);
@@ -218,6 +249,6 @@ renderer.setAnimationLoop(now => {
     `<b>${Math.round(Math.abs(speed) * 3.6)}</b> km/h` +
     (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
     (k.boostTime > 0 ? ' · BOOST' : '') +
-    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift</small>`;
+    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells</small>`;
   renderer.render(scene, camera);
 });

@@ -146,6 +146,6 @@ test('driving along the road edges never snags on the barrier or embankment', ()
 });
 
 test('clampInput rejects garbage from the wire', () => {
-  assert.deepEqual(clampInput({ steer: 9, throttle: NaN } as any), { steer: 1, throttle: 0, drift: false });
-  assert.deepEqual(clampInput(undefined), { steer: 0, throttle: 0, drift: false });
+  assert.deepEqual(clampInput({ steer: 9, throttle: NaN } as any), { steer: 1, throttle: 0, drift: false, cast: -1 });
+  assert.deepEqual(clampInput(undefined), { steer: 0, throttle: 0, drift: false, cast: -1 });
 });

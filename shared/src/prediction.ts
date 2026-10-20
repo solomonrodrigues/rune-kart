@@ -1,6 +1,7 @@
 // Client-side prediction for the local kart: step locally on every input, and when the server reports
 // its authoritative state plus the last input seq it applied, rewind to that state and replay the rest.
 import { copyKart, newKart, stepKart, type KartInput, type KartState } from './kart.ts';
+import type { Spell } from './spells.ts';
 import type { Track } from './track.ts';
 
 export interface SeqInput extends KartInput { seq: number }
@@ -11,6 +12,8 @@ export class Predictor {
   readonly state: KartState;
   private pending: SeqInput[] = [];
   private seq = 0;
+  /** Spell cast by the most recent step() (not by replays), for cast VFX. */
+  lastCast: Spell | null = null;
 
   constructor(start: KartState, private track: Track) {
     this.state = copyKart(newKart(start), start);
@@ -19,7 +22,7 @@ export class Predictor {
   /** Advance one fixed step; returns the input stamped with its seq, ready to send. */
   step(input: KartInput): SeqInput {
     const stamped = { ...input, seq: ++this.seq };
-    stepKart(this.state, stamped, this.track);
+    this.lastCast = stepKart(this.state, stamped, this.track);
     this.pending.push(stamped);
     if (this.pending.length > MAX_PENDING) this.pending.shift();
     return stamped;

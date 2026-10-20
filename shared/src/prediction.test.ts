@@ -15,7 +15,8 @@ function simulate(latency: (t: number) => number, ticks = 900) {
   const toClient: { at: number; s: KartState; ack: number }[] = [];
   let ack = 0, maxErr = 0, lastOut = 0, lastIn = 0;
   for (let t = 0; t < ticks; t++) {
-    const input = predictor.step({ steer: Math.sin(t / 50), throttle: 1, drift: t % 240 > 150 });
+    // Casts every so often too: mana, cooldowns and self-buffs are predicted like the rest of the state.
+    const input = predictor.step({ steer: Math.sin(t / 50), throttle: 1, drift: t % 240 > 150, cast: t % 37 === 0 ? (t / 37) % 4 : -1 });
     lastOut = Math.max(lastOut, t + latency(t)); // a websocket delivers in order
     toServer.push({ at: lastOut, input });
 

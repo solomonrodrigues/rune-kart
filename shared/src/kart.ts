@@ -1,11 +1,13 @@
 // Arcade kart physics. Deterministic and free of DOM/Node APIs: the client and the server both run it.
 import { Ray, Vector3, DoubleSide } from 'three';
 import { nearestSample, type Track } from './track.ts';
+import { MANA, NO_CAST, SPELLS, stepSpells, type Spell } from './spells.ts';
 
 export interface KartInput {
   steer: number;    // -1 (left) .. 1 (right)
   throttle: number; // -1 (brake/reverse) .. 1 (forward)
   drift: boolean;
+  cast?: number;    // spell slot to cast this step (0..3), or NO_CAST
 }
 
 // Flat numbers so the state maps 1:1 onto a Colyseus schema.
@@ -21,6 +23,11 @@ export interface KartState {
   driftHeld: number;  // last tick's drift button, for edge detection
   boostTime: number;
   steer: number;      // smoothed steering actually applied (input eases in, so keyboards aren't twitchy)
+  mana: number;
+  manaRegenMul: number; // set by the server from race position (catch-up), 1 otherwise
+  cd0: number; cd1: number; cd2: number; cd3: number; // spell cooldowns, seconds left
+  stunTime: number;   // spun out by a spell: no control until it runs out
+  wardTime: number;   // a ward is up: absorbs the next hit
 }
 
 // Tuning lives in one mutable object so it can be tweaked live from the console (window.KART).
@@ -48,6 +55,7 @@ export function newKart(at: { x: number; y: number; z: number; yaw: number }): K
     x: at.x, y: at.y, z: at.z, vx: 0, vy: 0, vz: 0, yaw: at.yaw,
     nx: 0, ny: 1, nz: 0, grounded: 0, offroad: 0,
     driftDir: 0, driftCharge: 0, driftHeld: 0, boostTime: 0, steer: 0,
+    mana: MANA.start, manaRegenMul: 1, cd0: 0, cd1: 0, cd2: 0, cd3: 0, stunTime: 0, wardTime: 0,
   };
 }
 
@@ -55,6 +63,7 @@ export const clampInput = (i: Partial<KartInput> | undefined): KartInput => ({
   steer: Math.max(-1, Math.min(1, Number(i?.steer) || 0)),
   throttle: Math.max(-1, Math.min(1, Number(i?.throttle) || 0)),
   drift: !!i?.drift,
+  cast: Number.isInteger(i?.cast) && i!.cast! >= 0 && i!.cast! < SPELLS.length ? i!.cast : NO_CAST,
 });
 
 /** 0 while not drifting / not charged, else 1..3 — the boost tier a release would give. */
@@ -74,8 +83,15 @@ function probeGround(track: Track, reach: number) {
   return ground ? { hit: ground, offroad: 1 } : null;
 }
 
-export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT): void {
+const STUNNED: KartInput = { steer: 0, throttle: 0, drift: false };
+
+/** One fixed physics step. Returns the spell cast this step, if any. */
+export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT): Spell | null {
   const K = KART;
+  const stunned = k.stunTime > 0;
+  k.stunTime = Math.max(0, k.stunTime - dt);
+  const cast = stepSpells(k, stunned ? NO_CAST : input.cast ?? NO_CAST, dt);
+  if (stunned) input = STUNNED;
   pos.set(k.x, k.y, k.z);
   vel.set(k.vx, k.vy, k.vz);
 
@@ -148,6 +164,7 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
     else if (input.throttle < 0) vF = vF > 0.5 ? vF - K.brake * dt : Math.max(-K.reverseMax, vF + K.accel * 0.5 * input.throttle * dt);
     vF -= vF * (input.throttle === 0 && !boosting ? K.coastDrag : K.drag) * dt;
     if (k.offroad && !boosting) vF -= vF * K.offroadDrag * dt;
+    if (stunned) vF -= vF * 2.5 * dt; // spinning out scrubs speed
     if (vF > max) vF -= (vF - max) * Math.min(1, 3 * dt); // soft cap so boosts bleed off smoothly
     vL *= Math.exp(-(k.driftDir ? K.driftGrip : K.grip) * dt);
     // Gravity along the slope, so hills slow you and descents speed you up.
@@ -185,11 +202,13 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
   k.grounded = grounded ? 1 : 0;
 
   if (k.y < K.killY) respawn(k, track);
+  return cast;
 }
 
 export function respawn(k: KartState, track: Track): void {
   const s = nearestSample(track, k.x, k.z);
-  Object.assign(k, newKart({ x: s.x, y: s.y + 1, z: s.z, yaw: s.yaw }));
+  const { mana, manaRegenMul, cd0, cd1, cd2, cd3 } = k; // falling off doesn't refund or drain mana
+  Object.assign(k, newKart({ x: s.x, y: s.y + 1, z: s.z, yaw: s.yaw }), { mana, manaRegenMul, cd0, cd1, cd2, cd3 });
 }
 
 /** Forward speed in m/s, for HUD and visuals. */

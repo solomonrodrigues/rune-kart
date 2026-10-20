@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { driftTier, KART, type KartState } from 'shared/kart';
+import { SPELLS } from 'shared/spells';
 
 const flat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 const TIER_COLOURS = [0x000000, 0x4fc3ff, 0xff9d2e, 0xd65cff];
@@ -12,6 +13,7 @@ export class KartModel {
   private wheels: THREE.Mesh[] = [];
   private sparks: THREE.Mesh[] = [];
   private flame: THREE.Mesh;
+  private ward: THREE.Mesh;
   private slide = 0;
   private wheelSpin = 0;
 
@@ -55,7 +57,14 @@ export class KartModel {
     this.flame.position.set(0, 0.5, -1.15);
     this.body.add(this.flame);
 
-    this.root.add(this.body);
+    this.ward = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(1.9, 1),
+      new THREE.MeshBasicMaterial({ color: SPELLS.find(s => s.id === 'ward')!.color, transparent: true, opacity: 0.22, depthWrite: false }),
+    );
+    this.ward.position.y = 0.7;
+    this.ward.visible = false;
+
+    this.root.add(this.body, this.ward);
   }
 
   private basis = new THREE.Matrix4();
@@ -73,7 +82,10 @@ export class KartModel {
 
     // Slide the body into the drift so it visibly hangs out.
     this.slide += (-k.driftDir * 0.35 - this.slide) * (1 - Math.exp(-10 * dt));
-    this.body.rotation.y = this.slide;
+    // Spun out: whirl the body until the stun wears off.
+    this.body.rotation.y = this.slide + (k.stunTime > 0 ? k.stunTime * 14 : 0);
+    this.ward.visible = k.wardTime > 0;
+    this.ward.rotation.y = time * 0.8;
 
     const speed = k.vx * Math.sin(k.yaw) + k.vz * Math.cos(k.yaw);
     this.wheelSpin += (speed / 0.32) * dt;
