@@ -8,6 +8,7 @@ import { autopilot } from 'shared/race';
 import { GREYBOX } from 'shared/tracks';
 import { KartModel } from './KartModel';
 import { EffectsView } from './effects';
+import { fxCamera } from './arcane';
 import { deniedCast, renderSpells, setManaColour } from './spellUi';
 import { MANA, NO_CAST, SPELLS, spawnEffect, stepEffects, type Effect } from 'shared/spells';
 import { buildScene, MOON_DIR } from './scene';
@@ -180,13 +181,13 @@ if (!OFFLINE) {
         let r = remotes.get(id);
         if (!r) {
           r = { snaps: [], model: new KartModel(color) };
-          scene.add(r.model.root);
+          scene.add(r.model.root, r.model.fx);
           remotes.set(id, r);
         }
         r.snaps.push({ t: now, s });
       }
       for (const [id, r] of remotes) {
-        if (!snap.some(([sid]) => sid === id)) { scene.remove(r.model.root); r.model.dispose(); remotes.delete(id); }
+        if (!snap.some(([sid]) => sid === id)) { scene.remove(r.model.root, r.model.fx); r.model.dispose(); remotes.delete(id); }
       }
     });
   });
@@ -201,7 +202,7 @@ const localPrev = copyKart(newKart(local), local); // state one step back, for r
 const localView = newKart(local); // scratch: the local kart as drawn
 const localModel = new KartModel(myColor, true); // local: no lamps or beams shining back at your camera
 setManaColour(myColor); // your orb matches your kart's tank
-scene.add(localModel.root);
+scene.add(localModel.root, localModel.fx);
 // A real headlight for your own kart only: it lights walls and trees, and one fixed light keeps shaders cheap
 // (every kart still gets glowing lamps).
 const headlight = new THREE.SpotLight(0xffe2b0, 45, 50, 0.55, 0.9, 1.3); // soft-edged so it blends with the beams
@@ -270,6 +271,7 @@ renderer.setAnimationLoop(now => {
   correction.x *= decay; correction.y *= decay; correction.z *= decay; correction.yaw *= decay;
   const k = lerpKart(localView, localPrev, local, acc / DT);
   k.x += correction.x; k.y += correction.y; k.z += correction.z; k.yaw += correction.yaw;
+  fxCamera.copy(camera.position); // wisp ribbons face the camera (last frame's position is close enough)
   localModel.update(k, dt, now / 1000);
   effects.update(now, dt, camera.position);
   renderSpells(local);

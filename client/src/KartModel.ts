@@ -3,6 +3,7 @@ import { driftTier, KART, type KartState } from 'shared/kart';
 import { MANA, SPELLS } from 'shared/spells';
 import { Monkey } from './Monkey';
 import { mergeStatic } from './mergeStatic';
+import { Motes, RuneBurst, Trail } from './arcane';
 
 const flat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 // Over-bright (HDR) colours: anything past the bloom threshold glows, so every spark tier, the boost
@@ -30,8 +31,21 @@ export class KartModel {
   private body = new THREE.Group(); // takes the drift slide offset
   private frontWheels: THREE.Mesh[] = [];
   private wheels: THREE.Mesh[] = [];
-  private sparks: THREE.Mesh[] = [];
-  private flame: THREE.Mesh;
+  private core: THREE.Mesh;                // boost: a pulsing orb of light at the back of the cart
+  /** World-space effects (wisps, comet tail, rune rings) — add this to the scene alongside `root`. */
+  readonly fx = new THREE.Group();
+  private motes = new Motes();
+  // Drift wisps: two continuous ribbons per rear tyre (left pair, right pair), twisting around each other.
+  private trails = [0, 1, 2, 3].map(() => new Trail());
+  private twist = 0;
+  private burst = new RuneBurst();
+  private moteDebt = 0;                    // fractional motes owed, so emission rate doesn't depend on frame rate
+  private lastBoost = 0;
+  private v1 = new THREE.Vector3();
+  private v2 = new THREE.Vector3();
+  private fwdW = new THREE.Vector3();
+  private rightW = new THREE.Vector3();
+  private carryV = new THREE.Vector3();
   private ward: THREE.Mesh;
   private wardBlink = 0;
   private driver = new Monkey();
@@ -116,21 +130,14 @@ export class KartModel {
       if (front) this.frontWheels.push(w);
     }
 
-    const sparkGeo = new THREE.OctahedronGeometry(0.18, 0);
-    for (const x of [0.8, -0.8]) {
-      const s = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({ color: TIER[1] }));
-      s.position.set(x, 0.15, -1.0);
-      s.visible = false;
-      this.sparks.push(s);
-      this.body.add(s);
-    }
-
-    this.flame = new THREE.Mesh(
-      new THREE.ConeGeometry(0.22, 1, 6).rotateX(-Math.PI / 2).translate(0, 0, -0.5),
-      new THREE.MeshBasicMaterial({ color: HASTE.clone(), transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+    this.core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.2, 1),
+      new THREE.MeshBasicMaterial({ color: HASTE.clone(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
-    this.flame.position.set(0, 0.5, -1.15);
-    this.body.add(this.flame);
+    this.core.position.set(0, 0.5, -1.15);
+    this.core.visible = false;
+    this.body.add(this.core);
+    this.fx.add(this.motes.points, ...this.trails.map(t => t.mesh), this.burst.group);
 
     // Headlights: glowing lamps and faint beams through the dusk. (Light on the road comes from your own
     // kart's spotlight, which follows ramps; a flat decal here would cut into them.)
@@ -183,7 +190,7 @@ export class KartModel {
 
     this.root.add(this.body, this.ward);
     // ~40 primitives → a handful of draw calls; the animated parts stay separate.
-    mergeStatic(this.body, [...this.wheels, ...this.sparks, this.flame]);
+    mergeStatic(this.body, [...this.wheels, this.core]);
   }
 
   private basis = new THREE.Matrix4();
@@ -230,22 +237,53 @@ export class KartModel {
     this.flag.needsUpdate = true;
     this.banner.rotation.y = Math.sin(time * 2.3 + this.root.id) * 0.12; // a slow swing about the pole itself
 
-    // Sparks only once a boost is banked: blue, orange, then purple.
+    this.root.updateMatrixWorld(true);
+    this.fwdW.set(0, 0, 1).applyQuaternion(this.root.quaternion);
+    this.rightW.set(-1, 0, 0).applyQuaternion(this.root.quaternion);
+    const rand = Math.random;
+
+    // Drift wisps: once a boost is banked, continuous ribbons of light stream off the rear tyres — blue,
+    // orange, then purple. Each ribbon's emitter circles the tyre's rim, so the ribbon corkscrews as it
+    // trails away; the two per tyre are half a turn apart, so they twist around each other. Higher tiers
+    // twist faster. When the drift ends, nothing new is laid and the ribbons fade from the tail.
     const tier = driftTier(k);
-    for (const s of this.sparks) {
-      s.visible = !!k.driftDir && tier > 0;
-      if (tier) (s.material as THREE.MeshBasicMaterial).color.copy(TIER[tier]);
-      s.scale.setScalar(0.6 + 0.5 * Math.abs(Math.sin(time * 40 + s.position.x)));
+    if (k.driftDir && tier > 0) {
+      this.twist += dt * [0, 9, 13, 17][tier];
+      this.carryV.set(k.vx, 0, k.vz); // ribbons ride along with the kart and slip back slowly
+      this.trails.forEach((trail, i) => {
+        const side = i < 2 ? -1 : 1, phase = this.twist + (i % 2) * Math.PI;
+        // Rim of the rear tyre (centre (±0.8, 0.34, -0.7); right is -x locally), just outboard of it.
+        const at = this.body.localToWorld(this.v1.set(-side * 0.95, 0.34 + Math.sin(phase) * 0.3, -0.7 - Math.cos(phase) * 0.3));
+        trail.colour.copy(TIER[tier]);
+        trail.push(at, this.carryV);
+      });
     }
 
+    // Boost: a pulsing orb of light where the engine flame was, a comet tail of motes, and rune rings
+    // bursting off the back when it fires — all in the colour of the sparks it was released on (Haste has its own).
+    const colour = k.boostTier ? TIER[k.boostTier] : HASTE;
     const boost = Math.min(1, k.boostTime / KART.boostTimes[0]);
-    this.flame.visible = boost > 0;
-    // The flame burns the colour of the sparks it was released on (Haste has its own).
-    (this.flame.material as THREE.MeshBasicMaterial).color.copy(k.boostTier ? TIER[k.boostTier] : HASTE);
-    this.flame.scale.set(1, 1, boost * (0.8 + 0.4 * Math.abs(Math.sin(time * 30))));
+    this.core.visible = boost > 0;
+    (this.core.material as THREE.MeshBasicMaterial).color.copy(colour);
+    this.core.scale.setScalar(0.6 + 0.7 * boost * (1 + 0.2 * Math.sin(time * 25)));
+    if (boost > 0) {
+      this.core.getWorldPosition(this.v1);
+      if (k.boostTime > this.lastBoost + 0.05) this.burst.fire(this.v1, this.fwdW, colour); // a new boost just fired
+      this.moteDebt += 100 * dt;
+      for (; this.moteDebt >= 1; this.moteDebt--) {
+        // Mostly the kart's own velocity: the tail stays a short comet behind the cart rather than a streak
+        // stretching back under the camera at full boost speed.
+        const vel = this.v2.copy(this.fwdW).multiplyScalar(-(2 + rand() * 3));
+        vel.x += k.vx * 0.8 + (rand() - 0.5) * 1.2; vel.y += (rand() - 0.3) * 1.2; vel.z += k.vz * 0.8 + (rand() - 0.5) * 1.2;
+        this.motes.spawn(this.v1, vel, colour, 0.25 + rand() * 0.2);
+      }
+    }
+    this.lastBoost = k.boostTime;
+    this.motes.update(dt);
+    for (const t of this.trails) t.update(dt);
+    this.burst.update(dt);
 
     // Mana tank level: a world-horizontal surface at the right height through the tank.
-    this.root.updateMatrixWorld(true);
     this.tank.getWorldPosition(this.tankPos);
     const level = Math.min(1, Math.max(0, k.mana / MANA.max));
     this.surface.constant = this.tankPos.y - TANK_R + level * 2 * TANK_R + (level >= 1 ? 0.05 : 0);
@@ -254,6 +292,9 @@ export class KartModel {
   }
 
   dispose() {
+    this.motes.dispose();
+    for (const t of this.trails) t.dispose();
+    this.burst.dispose();
     this.root.traverse(o => {
       if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
     });
