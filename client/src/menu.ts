@@ -87,6 +87,7 @@ export function runMenu() {
         <button data-go="host">Host Lobby<small>Choose the track and laps; invite friends</small></button>
         <button data-go="join">Join Lobby<small>Browse open lobbies or enter a code</small></button>
         <button data-go="practice">Practice<small>Drive alone, no opponents</small></button>
+        <button data-go="settings">Settings<small>Volume and music</small></button>
         <button data-go="howto">How to Play</button>
       </nav>`,
     host: () => `<h2>Host a lobby</h2>${trackPicker(track)}
@@ -103,6 +104,13 @@ export function runMenu() {
       <div class="actions"><button data-go="main">Back</button></div>`,
     practice: () => `<h2>Practice</h2>${trackPicker(track)}
       <div class="actions"><button data-go="main">Back</button><button class="primary" data-start="practice">Drive</button></div>`,
+    settings: () => {
+      const slider = (id: string, label: string, v: number) =>
+        `<label class="row"><span>${label}</span><input type="range" id="${id}" min="0" max="100" step="5" value="${Math.round(v * 100)}"><output for="${id}">${Math.round(v * 100)}%</output></label>`;
+      return `<h2>Settings</h2>${slider('volume', 'Volume', sound.volume)}${slider('musicVolume', 'Music', sound.musicVolume)}
+      <p class="hint">In a race, M mutes everything and N turns the music off.</p>
+      <div class="actions"><button data-go="main">Back</button></div>`;
+    },
     howto: () => `<h2>How to play</h2><dl class="keys">
       <dt>W A S D / arrows</dt><dd>Drive and steer</dd>
       <dt>Space / Shift</dt><dd>Drift — hold through a corner; sparks go blue → orange → purple; release to boost</dd>
@@ -133,6 +141,12 @@ export function runMenu() {
   };
 
   root.addEventListener('input', e => {
+    const el = e.target as HTMLInputElement;
+    if (el.id === 'volume' || el.id === 'musicVolume') {
+      sound.unlock();
+      (el.id === 'volume' ? sound.setVolume : sound.setMusicVolume).call(sound, Number(el.value) / 100);
+      el.nextElementSibling!.textContent = `${el.value}%`;
+    }
     if ((e.target as HTMLElement).id === 'player') saveName(player());
     if ((e.target as HTMLElement).id === 'private') priv = (e.target as HTMLInputElement).checked;
   });
@@ -154,6 +168,8 @@ export function runMenu() {
     if (b.dataset.start === 'practice') go({ practice: true, track });
     if (b.dataset.room) go({ join: b.dataset.room, player: player() || undefined });
   });
+  // Letting go of the Volume slider plays a click at the new level (the music previews itself as you drag).
+  root.addEventListener('change', e => { if ((e.target as HTMLElement).id === 'volume') sound.click(); });
   root.addEventListener('submit', e => {
     e.preventDefault();
     const code = root.querySelector<HTMLInputElement>('#code')!.value.trim();

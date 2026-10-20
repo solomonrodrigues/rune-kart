@@ -8,7 +8,10 @@ import { Music, type Cue } from './music';
 const CLIPS = ['boost', 'smite', 'snare', 'ward', 'chime', 'wall', 'hit', 'denied'] as const;
 type Clip = typeof CLIPS[number];
 
-const MUTE_KEY = 'runekart.muted', MUSIC_KEY = 'runekart.music';
+const MUTE_KEY = 'runekart.muted', MUSIC_KEY = 'runekart.music', VOLUME_KEY = 'runekart.volume', MUSIC_VOLUME_KEY = 'runekart.musicVolume';
+/** A remembered 0..1 setting (1 if unset or unreadable). */
+const stored = (key: string) => { try { const v = Number(localStorage.getItem(key) ?? 1); return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1; } catch { return 1; } };
+const store = (key: string, v: number) => { try { localStorage.setItem(key, String(v)); } catch { /* not remembered */ } };
 const VOLUME = 0.7;
 const DRIFT_GAIN = 0.03, SPARK_GAIN = 0.015; // measured: the drift "eee" sits level with the engine; sparks a faint shimmer
 
@@ -22,6 +25,8 @@ export class Sound {
   private sparkTier = 0; // the drift's current spark colour: 0 none, 1 blue, 2 orange, 3 purple
   muted = (() => { try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; } })();
   musicOn = (() => { try { return localStorage.getItem(MUSIC_KEY) !== '0'; } catch { return true; } })();
+  volume = stored(VOLUME_KEY);           // the menu's Volume setting, 0..1
+  musicVolume = stored(MUSIC_VOLUME_KEY); // and its Music setting
   private music?: Music;
   private cue: Cue | null = null; // wanted even before the audio unlocks, so it starts the moment it does
 
@@ -34,8 +39,24 @@ export class Sound {
   toggleMute() {
     this.muted = !this.muted;
     try { localStorage.setItem(MUTE_KEY, this.muted ? '1' : '0'); } catch { /* not remembered */ }
-    if (this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : VOLUME, this.ctx.currentTime, 0.05);
+    if (this.ctx) this.master.gain.setTargetAtTime(this.level(), this.ctx.currentTime, 0.05);
     return this.muted;
+  }
+
+  private level() { return this.muted ? 0 : VOLUME * this.volume; }
+
+  /** Overall volume, 0..1 (remembered). */
+  setVolume(v: number) {
+    this.volume = Math.min(1, Math.max(0, v));
+    store(VOLUME_KEY, this.volume);
+    if (this.ctx) this.master.gain.setTargetAtTime(this.level(), this.ctx.currentTime, 0.05);
+  }
+
+  /** Music volume, 0..1, on top of the overall volume (remembered). */
+  setMusicVolume(v: number) {
+    this.musicVolume = Math.min(1, Math.max(0, v));
+    store(MUSIC_VOLUME_KEY, this.musicVolume);
+    this.music?.setVolume(this.musicVolume);
   }
 
   /** N: music on or off (remembered); M still mutes everything. */
@@ -55,10 +76,10 @@ export class Sound {
   private build() {
     const ctx = this.ctx = new AudioContext();
     this.master = ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : VOLUME;
+    this.master.gain.value = this.level();
     // Gentle compression so stacked effects don't clip.
     this.master.connect(ctx.createDynamicsCompressor()).connect(ctx.destination);
-    this.music = new Music(ctx, this.master, this.musicOn);
+    this.music = new Music(ctx, this.master, this.musicOn, this.musicVolume);
     this.music.set(this.cue);
     // A second of white noise for the drift.
     this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);

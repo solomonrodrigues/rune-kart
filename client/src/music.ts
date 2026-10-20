@@ -41,9 +41,9 @@ export class Music {
   private timer: number;
   private songs: Record<Cue, Song>;
 
-  constructor(private ctx: AudioContext, out: AudioNode, enabled: boolean) {
+  constructor(private ctx: AudioContext, out: AudioNode, private enabled: boolean, private volume = 1) {
     this.bus = ctx.createGain();
-    this.bus.gain.value = enabled ? MUSIC_LEVEL : 0;
+    this.bus.gain.value = this.level();
     this.duckGain = ctx.createGain();
     this.bus.connect(this.duckGain).connect(out);
     // A cathedral-ish reverb: three seconds of decaying noise as the impulse response.
@@ -59,7 +59,9 @@ export class Music {
     this.timer = window.setInterval(() => this.schedule(), 25);
   }
 
-  setEnabled(on: boolean) { this.bus.gain.setTargetAtTime(on ? MUSIC_LEVEL : 0, this.ctx.currentTime, 0.3); }
+  private level() { return this.enabled ? MUSIC_LEVEL * this.volume : 0; }
+  setEnabled(on: boolean) { this.enabled = on; this.bus.gain.setTargetAtTime(this.level(), this.ctx.currentTime, 0.3); }
+  setVolume(v: number) { this.volume = v; this.bus.gain.setTargetAtTime(this.level(), this.ctx.currentTime, 0.05); }
 
   /** Dip the music under a big sound effect (a boost, an impact), then let it swell back. */
   duck(depth = 0.5) {
