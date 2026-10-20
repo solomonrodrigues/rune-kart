@@ -26,6 +26,7 @@ export function buildScene(track: Track) {
   const vcol = (side: THREE.Side = THREE.FrontSide) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side });
   mesh(track.road, vcol());
   mesh(track.walls, vcol(THREE.DoubleSide)).castShadow = true;
+  mesh(track.trim, vcol(THREE.DoubleSide));
   mesh(track.ground, new THREE.MeshLambertMaterial({ color: 0x6aa84f }));
 
   // Deterministic scatter so every client sees the same trees; keep them clear of the road.

@@ -21,6 +21,7 @@ export interface Track {
   def: TrackDef;
   road: BufferGeometry;   // vertex colours: alternating stripes so speed reads on screen
   walls: BufferGeometry;  // outer wall + inner embankment where the road is raised
+  trim: BufferGeometry;   // visual only: closes the gap between the embankment top and the road edge
   ground: BufferGeometry; // offroad grass
   roadBVH: MeshBVH;
   wallBVH: MeshBVH;
@@ -58,6 +59,7 @@ export function createTrack(def: TrackDef): Track {
   }
 
   const road: number[] = [], roadCol: number[] = [], walls: number[] = [], wallCol: number[] = [];
+  const trim: number[] = [], trimCol: number[] = [];
   const quad = (out: number[], a: Vector3, b: Vector3, c: Vector3, d: Vector3) =>
     out.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, b.x, b.y, b.z, d.x, d.y, d.z, c.x, c.y, c.z);
   const colour = (out: number[], rgb: number[], verts: number) => { for (let v = 0; v < verts; v++) out.push(...rgb); };
@@ -82,6 +84,8 @@ export function createTrack(def: TrackDef): Track {
     if (ii.y > 0.3 || ij.y > 0.3) {
       quad(walls, at(ii, GROUND_Y), at(ij, GROUND_Y), at(ii, Math.max(GROUND_Y, ii.y - 0.3)), at(ij, Math.max(GROUND_Y, ij.y - 0.3)));
       colour(wallCol, [0.55, 0.45, 0.35], 6);
+      quad(trim, at(ii, Math.max(GROUND_Y, ii.y - 0.3)), at(ij, Math.max(GROUND_Y, ij.y - 0.3)), ii, ij);
+      colour(trimCol, [0.55, 0.45, 0.35], 6);
     }
   }
 
@@ -97,7 +101,7 @@ export function createTrack(def: TrackDef): Track {
   const groundGeo = new PlaneGeometry(800, 800).rotateX(-Math.PI / 2).translate(0, GROUND_Y, 0);
 
   return {
-    def, road: roadGeo, walls: wallGeo, ground: groundGeo,
+    def, road: roadGeo, walls: wallGeo, trim: geo(trim, trimCol), ground: groundGeo,
     roadBVH: new MeshBVH(roadGeo), wallBVH: new MeshBVH(wallGeo), groundBVH: new MeshBVH(groundGeo),
     samples,
   };
