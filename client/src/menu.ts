@@ -108,7 +108,7 @@ export function runMenu() {
       const slider = (id: string, label: string, v: number) =>
         `<label class="row"><span>${label}</span><input type="range" id="${id}" min="0" max="100" step="5" value="${Math.round(v * 100)}"><output for="${id}">${Math.round(v * 100)}%</output></label>`;
       return `<h2>Settings</h2>${slider('volume', 'Volume', sound.volume)}${slider('musicVolume', 'Music', sound.musicVolume)}
-      <p class="hint">In a race, M mutes everything and N turns the music off.</p>
+      <p class="hint">In a race, M mutes everything and K turns the music off.</p>
       <div class="actions"><button data-go="main">Back</button></div>`;
     },
     howto: () => `<h2>How to play</h2><dl class="keys">
@@ -117,7 +117,7 @@ export function runMenu() {
       <dt>1 2 3 4</dt><dd>Cast Haste, Smite, Snare, Ward — they cost mana, which refills over time</dd>
       <dt>C</dt><dd>Look back</dd>
       <dt>M</dt><dd>Mute or unmute sound</dd>
-      <dt>N</dt><dd>Music on or off</dd>
+      <dt>K</dt><dd>Music on or off</dd>
       <dt>Enter</dt><dd>Ready up in the lobby</dd>
       <dt>Esc</dt><dd>Back to this menu</dd></dl>
       <div class="actions"><button data-go="main">Back</button></div>`,

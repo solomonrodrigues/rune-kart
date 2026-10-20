@@ -99,13 +99,13 @@ resize();
 // --- Input ---
 const keys = new Set<string>();
 addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'Space') e.preventDefault(); });
-// Sound starts on the first key press or click (browser autoplay rules); M toggles mute, N the music.
+// Sound starts on the first key press or click (browser autoplay rules); M toggles mute, K the music.
 const sound = new Sound();
 for (const ev of ['keydown', 'pointerdown'] as const) addEventListener(ev, sound.unlock);
 addEventListener('keydown', e => {
   if (e.repeat) return;
   if (e.code === 'KeyM') sound.toggleMute();
-  if (e.code === 'KeyN') sound.toggleMusic();
+  if (e.code === 'KeyK') sound.toggleMusic();
 });
 // Casts are edge-triggered: a key press queues one cast for the next physics step.
 let pendingCast = NO_CAST;
@@ -415,6 +415,6 @@ renderer.setAnimationLoop(now => {
     `<b>${Math.round(Math.abs(speed) * 3.6)}</b> km/h` +
     (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
     (k.boostTime > 0 ? ' · BOOST' : '') +
-    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells · C look back · M mute · N music · Esc menu</small>`;
+    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells · C look back · M mute · K music · Esc menu</small>`;
   composer.render(dt);
 });

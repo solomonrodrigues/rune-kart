@@ -59,7 +59,7 @@ export class Sound {
     this.music?.setVolume(this.musicVolume);
   }
 
-  /** N: music on or off (remembered); M still mutes everything. */
+  /** K: music on or off (remembered); M still mutes everything. */
   toggleMusic() {
     this.musicOn = !this.musicOn;
     try { localStorage.setItem(MUSIC_KEY, this.musicOn ? '1' : '0'); } catch { /* not remembered */ }
