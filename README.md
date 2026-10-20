@@ -20,4 +20,4 @@ Racing: everyone presses Enter in the lobby to ready up, then a 3 s countdown, 3
 
 Spells: your mana orb (bottom left) refills over time, faster while drifting and when you're behind. Keys 1–4 cast **Surge** (boost), **Arcane Bolt** (forward projectile, spins out the kart it hits), **Rune Trap** (dropped behind you) and **Ward** (blocks the next hit). Costs and cooldowns live in `shared/src/spells.ts`.
 
-Controls: Enter to ready up, 1–4 to cast, WASD / arrows to drive, Space or Shift to drift (hold while steering, release for a boost; sparks go blue → orange → purple).
+Controls: Enter to ready up, 1–4 to cast, hold C to look back, WASD / arrows to drive, Space or Shift to drift (hold while steering, release for a boost; sparks go blue → orange → purple).

@@ -239,10 +239,18 @@ renderer.setAnimationLoop(now => {
   const rate = k.driftDir ? 3 : 6;
   camYaw += wrap(k.yaw - camYaw) * (1 - Math.exp(-rate * dt));
   const dist = 6.5 + Math.max(0, speed) * 0.06;
-  camPos.set(k.x - Math.sin(camYaw) * dist, k.y + 2.8, k.z - Math.cos(camYaw) * dist);
-  camera.position.lerp(camPos, 1 - Math.exp(-12 * dt));
-  lookAt.set(k.x + Math.sin(camYaw) * 4, k.y + 1, k.z + Math.cos(camYaw) * 4);
-  camera.lookAt(lookAt);
+  if (keys.has('KeyC')) {
+    // Look back: hard cut to a camera in front of the kart, facing the driver and whoever's behind.
+    camera.position.set(k.x + Math.sin(k.yaw) * 5, k.y + 2.2, k.z + Math.cos(k.yaw) * 5);
+    camera.lookAt(k.x, k.y + 1.2, k.z);
+  } else {
+    camPos.set(k.x - Math.sin(camYaw) * dist, k.y + 2.8, k.z - Math.cos(camYaw) * dist);
+    // Snap back after a look-back instead of swinging through the kart.
+    if (camera.position.distanceToSquared(camPos) > 64) camera.position.copy(camPos);
+    camera.position.lerp(camPos, 1 - Math.exp(-12 * dt));
+    lookAt.set(k.x + Math.sin(camYaw) * 4, k.y + 1, k.z + Math.cos(camYaw) * 4);
+    camera.lookAt(lookAt);
+  }
   const fov = 70 + Math.max(0, speed - KART.maxSpeed * 0.5) * 0.4 + (k.boostTime > 0 ? 8 : 0);
   camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt));
   camera.updateProjectionMatrix();
@@ -257,6 +265,6 @@ renderer.setAnimationLoop(now => {
     `<b>${Math.round(Math.abs(speed) * 3.6)}</b> km/h` +
     (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
     (k.boostTime > 0 ? ' · BOOST' : '') +
-    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells</small>`;
+    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells · C look back</small>`;
   renderer.render(scene, camera);
 });
