@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Track } from 'shared/track';
 import { buildMountains } from './mountains';
 import { buildBraziers, buildCrows, buildLightning, buildMist } from './atmosphere';
+import { buildDressing } from './dressing';
 
 // Dark fantasy palette: a moonlit dusk, cold stone, and runes and crystals that glow (bloom picks them up).
 const HORIZON = 0x3a2846;
@@ -145,6 +146,11 @@ export function buildScene(track: Track) {
   const clearance = half + 5;
   const nearRoad = (x: number, z: number) => samples.some(s => (s.x - x) ** 2 + (s.z - z) ** 2 < clearance * clearance);
 
+  // Set dressing (graveyards, gibbets, banners, ruins) goes down first; the scatter below keeps clear of it.
+  const dressing = buildDressing(track, rand, (x, z, r) => !samples.some(s => (s.x - x) ** 2 + (s.z - z) ** 2 < (clearance + r) ** 2));
+  scene.add(...dressing.objects);
+  const taken = (x: number, z: number) => dressing.reserved.some(r => (r.x - x) ** 2 + (r.z - z) ** 2 < (r.r + 1.5) ** 2);
+
   const pine = mergeGeometries([
     new THREE.CylinderGeometry(0.25, 0.35, 2, 5).translate(0, 1, 0),
     new THREE.ConeGeometry(1.8, 3.2, 6).translate(0, 3.2, 0),
@@ -180,7 +186,7 @@ export function buildScene(track: Track) {
   const bx0 = Math.min(...xs) - M, bx1 = Math.max(...xs) + M, bz0 = Math.min(...zs) - M, bz1 = Math.max(...zs) + M;
   for (let i = 0; i < 4000; i++) {
     const x = bx0 + rand() * (bx1 - bx0), z = bz0 + rand() * (bz1 - bz0);
-    if (nearRoad(x, z)) continue;
+    if (nearRoad(x, z) || taken(x, z)) continue;
     q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rand() * Math.PI * 2);
     const roll = rand();
     const size = 0.7 + rand() * 0.8;
@@ -267,6 +273,7 @@ export function buildScene(track: Track) {
   /** Per frame: keep the sky centred on the camera, drift the motes and mist, and animate the atmosphere. */
   function update(camera: THREE.Camera, around: THREE.Vector3, dt: number, time: number) {
     braziers.update(time);
+    dressing.update(time);
     mist.update(camera, around, dt);
     crows.update(time);
     castleCrows.update(time);

@@ -21,20 +21,32 @@ function softTexture(w: number, h: number) {
   return new THREE.CanvasTexture(c);
 }
 
-// --- Braziers: on the outside of every real corner, marking the racing line with firelight ---
-export function buildBraziers(track: Track) {
+/**
+ * Spots beside the road, `offset` m from the centreline, every `step` samples from `start`: on the outside of
+ * real corners, or on both sides of (near-)straights. Skips bridges and anywhere another stretch of road runs close.
+ */
+export function roadside(track: Track, opts: { step: number; offset: number; where: 'corners' | 'straights'; start?: number }) {
   const { samples, def } = track, half = def.width / 2, n = samples.length, bridges = new Set(track.bridges);
-  const spots: { x: number; y: number; z: number }[] = []; // y: the bowl's height, level with the road beside it
-  for (let i = 0; i < n && spots.length < 60; i += 4) {
+  const spots: { x: number; y: number; z: number; yaw: number }[] = []; // y: the road's height there
+  for (let i = opts.start ?? 0; i < n; i += opts.step) {
     const s = samples[i];
     // Turn over ±15 m of road; a positive turn is to the left, so the outside of the corner is to the right.
     const turn = wrap(samples[(i + 5) % n].yaw - samples[(i - 5 + n) % n].yaw);
-    if (Math.abs(turn) < 0.35 || bridges.has(i)) continue; // gentle bends and bridges get none
-    const side = Math.sign(turn), d = half + 2.5;
-    const x = s.x - Math.cos(s.yaw) * side * d, z = s.z + Math.sin(s.yaw) * side * d;
-    if (samples.some(o => (o.x - x) ** 2 + (o.z - z) ** 2 < (half + 1.5) ** 2)) continue; // another stretch of road
-    spots.push({ x, y: Math.max(0, s.y) + 1.5, z });
+    if (bridges.has(i)) continue;
+    const sides = opts.where === 'corners' ? (Math.abs(turn) >= 0.35 ? [Math.sign(turn)] : []) : (Math.abs(turn) < 0.2 ? [-1, 1] : []);
+    for (const side of sides) {
+      const x = s.x - Math.cos(s.yaw) * side * opts.offset, z = s.z + Math.sin(s.yaw) * side * opts.offset;
+      if (samples.some(o => (o.x - x) ** 2 + (o.z - z) ** 2 < (half + 1.5) ** 2)) continue;
+      spots.push({ x, y: Math.max(0, s.y), z, yaw: s.yaw });
+    }
   }
+  return spots;
+}
+
+// --- Braziers: on the outside of every real corner, marking the racing line with firelight ---
+export function buildBraziers(track: Track) {
+  // y: the bowl's height, level with the road beside it
+  const spots = roadside(track, { step: 4, offset: track.def.width / 2 + 2.5, where: 'corners' }).slice(0, 60).map(s => ({ ...s, y: s.y + 1.5 }));
   // A pole from the ground up to the bowl (tall beside raised road, like a lamp post), a foot, and the bowl.
   const ironMat = new THREE.MeshLambertMaterial({ color: 0x1e1b22, flatShading: true });
   const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.09, 0.15, 1, 5).translate(0, 0.5, 0), ironMat, spots.length);
