@@ -47,6 +47,7 @@ export const KART = {
   driftMinSpeed: 10, driftBase: 0.8, driftTighten: 0.6, driftWiden: 0.55,
   driftTiers: [0.6, 1.2, 2.0], boostTimes: [0.6, 1.1, 1.8], // seconds of charge per spark tier
   boostMax: 40, boostAccel: 45,
+  offroadBoostMax: 22, // a boost still helps on the grass, but never makes it faster than the road (maxSpeed)
   gravity: 30, airSteer: 0.35,
   radius: 0.7, probe: 1.5, snap: 0.45,
   wallBounce: 0.25,
@@ -173,8 +174,10 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
   // --- Longitudinal / lateral forces (grounded only; in the air momentum carries) ---
   if (grounded) {
     const boosting = k.boostTime > 0;
-    const max = boosting ? K.boostMax : k.offroad ? K.offroadMax : K.maxSpeed;
-    if (boosting) vF += K.boostAccel * dt;
+    const max = boosting ? (k.offroad ? K.offroadBoostMax : K.boostMax) : k.offroad ? K.offroadMax : K.maxSpeed;
+    // On the road a boost overshoots boostMax for a moment (the soft cap below reins it in); on the grass it
+    // stops pushing at offroadBoostMax, so it helps you recover without ever making the grass a shortcut.
+    if (boosting) { if (!k.offroad || vF < max) vF += K.boostAccel * dt; }
     // Punchy off the line, tapering towards top speed.
     else if (input.throttle > 0) vF += K.accel * input.throttle * Math.max(0, 1 - (vF / max) ** 2) * dt;
     else if (input.throttle < 0) vF = vF > 0.5 ? vF - K.brake * dt : Math.max(-K.reverseMax, vF + K.accel * 0.5 * input.throttle * dt);

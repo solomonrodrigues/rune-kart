@@ -200,3 +200,16 @@ test('a rescued kart is held still for rescueHold, then drives on', () => {
   drive(90, () => gas, k);
   assert.ok(kartSpeed(k) > 5 && k.rescue === 0, `drives on (speed ${kartSpeed(k).toFixed(1)})`);
 });
+
+test('a boost helps on the grass, but never beats driving on the road', () => {
+  const saved = { ...KART };
+  KART.rescueDistance = KART.rescueAfter = Infinity; // the open-field test bench, far from the road
+  const k = newKart({ x: 300, y: GROUND_Y, z: 300, yaw: 0 });
+  drive(10, () => idle, k);
+  let top = 0;
+  for (let i = 0; i < 60 * 3; i++) { k.boostTime = 1; stepKart(k, gas, track); top = Math.max(top, kartSpeed(k)); }
+  Object.assign(KART, saved);
+  assert.equal(k.offroad, 1);
+  assert.ok(top > KART.offroadMax + 4, `boost on grass reached ${top.toFixed(1)} m/s`);
+  assert.ok(top < KART.maxSpeed - 4, `but stays well under road speed (${top.toFixed(1)} m/s)`);
+});
