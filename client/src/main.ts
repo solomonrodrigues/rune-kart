@@ -99,10 +99,14 @@ resize();
 // --- Input ---
 const keys = new Set<string>();
 addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'Space') e.preventDefault(); });
-// Sound starts on the first key press or click (browser autoplay rules); M toggles mute.
+// Sound starts on the first key press or click (browser autoplay rules); M toggles mute, N the music.
 const sound = new Sound();
 for (const ev of ['keydown', 'pointerdown'] as const) addEventListener(ev, sound.unlock);
-addEventListener('keydown', e => { if (e.code === 'KeyM' && !e.repeat) sound.toggleMute(); });
+addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (e.code === 'KeyM') sound.toggleMute();
+  if (e.code === 'KeyN') sound.toggleMusic();
+});
 // Casts are edge-triggered: a key press queues one cast for the next physics step.
 let pendingCast = NO_CAST;
 addEventListener('keydown', e => {
@@ -397,8 +401,11 @@ renderer.setAnimationLoop(now => {
   sun.position.set(k.x + MOON_DIR.x * 70, k.y + MOON_DIR.y * 70, k.z + MOON_DIR.z * 70);
   sun.target.position.set(k.x, k.y, k.z);
   focus.set(k.x, k.y, k.z);
-  // The blood moon rises once anyone reaches the final lap, and sets when the race ends.
-  setBloodMoon(race?.phase === 'racing' && race.standings.some(s => s.racing && s.lap >= race!.laps));
+  // The blood moon rises once anyone reaches the final lap, and sets when the race ends; the music follows:
+  // the Hymn in the lobby, the Gallop from GO (and in practice), Blood Moon on the final lap, a Requiem at the end.
+  const finalLap = race?.phase === 'racing' && race.standings.some(s => s.racing && s.lap >= race!.laps);
+  setBloodMoon(finalLap);
+  sound.setMusic(!race ? 'gallop' : race.phase === 'racing' ? (finalLap ? 'blood' : 'gallop') : race.phase === 'results' ? 'requiem' : 'hymn');
   updateScene(camera, focus, dt, now / 1000);
 
   const tier = driftTier(k);
@@ -408,6 +415,6 @@ renderer.setAnimationLoop(now => {
     `<b>${Math.round(Math.abs(speed) * 3.6)}</b> km/h` +
     (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
     (k.boostTime > 0 ? ' · BOOST' : '') +
-    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells · C look back · M mute · Esc menu</small>`;
+    `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells · C look back · M mute · N music · Esc menu</small>`;
   composer.render(dt);
 });

@@ -109,6 +109,7 @@ export function runMenu() {
       <dt>1 2 3 4</dt><dd>Cast Haste, Smite, Snare, Ward — they cost mana, which refills over time</dd>
       <dt>C</dt><dd>Look back</dd>
       <dt>M</dt><dd>Mute or unmute sound</dd>
+      <dt>N</dt><dd>Music on or off</dd>
       <dt>Enter</dt><dd>Ready up in the lobby</dd>
       <dt>Esc</dt><dd>Back to this menu</dd></dl>
       <div class="actions"><button data-go="main">Back</button></div>`,
@@ -136,6 +137,7 @@ export function runMenu() {
     if ((e.target as HTMLElement).id === 'private') priv = (e.target as HTMLInputElement).checked;
   });
   const sound = new Sound();
+  sound.setMusic('hymn'); // starts with the first click (browsers need a gesture first)
   root.addEventListener('click', e => {
     const b = (e.target as HTMLElement).closest('button');
     if (!b) return;

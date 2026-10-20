@@ -1,12 +1,14 @@
 // All game sound. Recorded CC0 clips (Kenney, see public/sfx/LICENSE.txt) for the boost, spells and hits;
-// the engine, the drift and the musical race cues (countdown, laps, finish) are synthesised. Browsers only allow audio after a
+// the engine, the drift, the musical race cues (countdown, laps, finish) and the score (music.ts) are synthesised. Browsers only allow audio after a
 // user gesture, so nothing loads or plays until `unlock()` runs from a key press or click.
 
 // Every clip in one place, so swapping a sound is a one-word change.
+import { Music, type Cue } from './music';
+
 const CLIPS = ['boost', 'smite', 'snare', 'ward', 'chime', 'wall', 'hit', 'denied'] as const;
 type Clip = typeof CLIPS[number];
 
-const MUTE_KEY = 'runekart.muted';
+const MUTE_KEY = 'runekart.muted', MUSIC_KEY = 'runekart.music';
 const VOLUME = 0.7;
 const DRIFT_GAIN = 0.03, SPARK_GAIN = 0.015; // measured: the drift "eee" sits level with the engine; sparks a faint shimmer
 
@@ -19,6 +21,9 @@ export class Sound {
   private drift?: { tones: OscillatorNode[]; gain: GainNode; sparks: AudioBufferSourceNode; sparkGain: GainNode };
   private sparkTier = 0; // the drift's current spark colour: 0 none, 1 blue, 2 orange, 3 purple
   muted = (() => { try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; } })();
+  musicOn = (() => { try { return localStorage.getItem(MUSIC_KEY) !== '0'; } catch { return true; } })();
+  private music?: Music;
+  private cue: Cue | null = null; // wanted even before the audio unlocks, so it starts the moment it does
 
   /** Call from any user gesture; creates the audio graph and starts loading the clips the first time. */
   unlock = () => {
@@ -33,12 +38,28 @@ export class Sound {
     return this.muted;
   }
 
+  /** N: music on or off (remembered); M still mutes everything. */
+  toggleMusic() {
+    this.musicOn = !this.musicOn;
+    try { localStorage.setItem(MUSIC_KEY, this.musicOn ? '1' : '0'); } catch { /* not remembered */ }
+    this.music?.setEnabled(this.musicOn);
+    return this.musicOn;
+  }
+
+  /** Which piece of the score should play: it changes on the next bar. */
+  setMusic(cue: Cue | null) {
+    this.cue = cue;
+    this.music?.set(cue);
+  }
+
   private build() {
     const ctx = this.ctx = new AudioContext();
     this.master = ctx.createGain();
     this.master.gain.value = this.muted ? 0 : VOLUME;
     // Gentle compression so stacked effects don't clip.
     this.master.connect(ctx.createDynamicsCompressor()).connect(ctx.destination);
+    this.music = new Music(ctx, this.master, this.musicOn);
+    this.music.set(this.cue);
     // A second of white noise for the drift.
     this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = this.noise.getChannelData(0);
@@ -70,6 +91,7 @@ export class Sound {
    */
   private thoom(v: number) {
     if (!this.ctx || this.muted) return;
+    if (v > 0.4) this.music?.duck(1 - 0.5 * v); // a close impact dips the music
     const ctx = this.ctx, t = ctx.currentTime;
     const o = ctx.createOscillator(), og = ctx.createGain();
     o.frequency.setValueAtTime(170, t);
@@ -194,6 +216,7 @@ export class Sound {
   boost(tier = 0) {
     const k = [1, 0.8, 1, 1.25][tier] ?? 1;
     this.play('boost', { gain: 0.8 * k, rate: 1.05 - 0.15 * k }); // ×0.9 (as auditioned) for an orange boost
+    this.music?.duck();
   }
   wallHit(force: number) { this.play('wall', { gain: Math.min(1, 0.25 + force * 0.06), rate: 0.9 + Math.random() * 0.2 }); }
   denied() { this.play('denied', { gain: 0.4, rate: 0.7 }); }
