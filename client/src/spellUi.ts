@@ -1,4 +1,4 @@
-// Mana orb (Diablo-style liquid with a rolling surface) and the spell bar, driven by the local predicted kart.
+// Mana orb (Diablo-style churning liquid) and the spell bar, driven by the local predicted kart.
 import type { KartState } from 'shared/kart';
 import { MANA, SPELLS, cooldownOf, type Spell } from 'shared/spells';
 
@@ -14,7 +14,7 @@ const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 const root = document.getElementById('spells')!;
 root.innerHTML =
   `<div class="orb" role="meter" aria-label="Mana" aria-valuemin="0" aria-valuemax="${MANA.max}">` +
-  `<div class="liquid"><div class="wave"></div></div><div class="glass"></div><span></span></div>` +
+  `<div class="liquid"><div class="swirl"></div><div class="wave"></div></div><div class="glass"></div><span></span></div>` +
   `<div class="bar">` +
   SPELLS.map((s, i) =>
     `<div class="slot" style="--c:${hex(s.color)}" title="${s.name} — ${s.cost} mana">` +
@@ -33,7 +33,9 @@ export function renderSpells(k: KartState) {
   const key = `${Math.floor(k.mana)}|${k.cd0.toFixed(1)}${k.cd1.toFixed(1)}${k.cd2.toFixed(1)}${k.cd3.toFixed(1)}|${k.stunTime > 0}`;
   if (key === last) return; // only touch the DOM when something visible changed
   last = key;
-  liquid.style.height = `${(k.mana / MANA.max) * 100}%`;
+  // Overshoot the rim slightly as it fills, so a full orb has no sliver of surface left at the top.
+  const level = k.mana / MANA.max;
+  liquid.style.height = `calc(${level * 100}% + ${level * 8}px)`;
   label.textContent = String(Math.floor(k.mana));
   orb.setAttribute('aria-valuenow', String(Math.floor(k.mana)));
   orb.classList.toggle('full', k.mana >= MANA.max);

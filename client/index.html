@@ -19,18 +19,24 @@
       #banner tr.me { color: #ffd98a; }
       #banner i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; box-shadow: 0 0 0 1px #0008; }
       #banner kbd { font: inherit; padding: 0 6px; border: 1px solid var(--bronze-hi); border-radius: 3px; background: #0006; }
-      /* Mana orb: dark glass sphere in a bronze frame, liquid with a rolling surface, gloss on top. */
+      /* Mana orb: dark glass sphere in a bronze frame, glowing liquid that slowly churns, gloss on top. */
       #spells { position: fixed; left: 14px; bottom: 14px; display: flex; align-items: flex-end; gap: 12px; font: 12px var(--serif); color: var(--gold); pointer-events: none; }
       #spells .orb { position: relative; width: 104px; height: 104px; border-radius: 50%; overflow: hidden; background: #07050f;
         border: 5px solid var(--bronze); box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 6px 16px #000a; }
       #spells .orb .liquid { position: absolute; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 40% 85%, #6f8dff, #2441d6 45%, #0d1670 90%); transition: height .15s linear; }
-      /* A huge rotating rounded square in the empty colour; its edge dips into the liquid as a wave. */
-      #spells .orb .wave { position: absolute; left: 50%; bottom: calc(100% - 7px); width: 220px; height: 220px; margin-left: -110px; border-radius: 43%; background: #07050f; animation: orb-wave 7s linear infinite; }
+      /* Slow swirl of brighter and darker tones inside the liquid, like Diablo's churning orb. */
+      #spells .orb .swirl { position: absolute; inset: 0; overflow: hidden; }
+      #spells .orb .swirl::before, #spells .orb .swirl::after { content: ''; position: absolute; inset: -70%; mix-blend-mode: screen; }
+      #spells .orb .swirl::before { background: conic-gradient(from 0deg, #0000, #a9bcff38 12%, #0000 28%, #0000 50%, #8fa6ff2e 64%, #0000 80%); animation: orb-swirl 16s linear infinite; }
+      #spells .orb .swirl::after { background: radial-gradient(circle at 30% 40%, #c5d2ff2a, #0000 22%), radial-gradient(circle at 70% 65%, #050a4a66, #0000 26%); animation: orb-swirl 23s linear infinite reverse; mix-blend-mode: normal; }
+      /* Calm surface: a barely-undulating edge (huge, slowly turning rounded square in the empty colour) and a bright meniscus. */
+      #spells .orb .wave { position: absolute; left: 50%; bottom: calc(100% - 3px); width: 260px; height: 260px; margin-left: -130px; border-radius: 47%; background: #07050f; animation: orb-swirl 14s linear infinite; }
+      #spells .orb .liquid::before { content: ''; position: absolute; left: 0; right: 0; top: 3px; height: 2px; background: linear-gradient(90deg, #0000, #c3d0ffcc, #0000); z-index: 1; }
       #spells .orb .glass { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 26%, #ffffff55, #ffffff10 22%, transparent 40%), radial-gradient(circle at 50% 120%, transparent 55%, #0008); }
       #spells .orb span { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; font-size: 19px; color: #f2ecff; text-shadow: 0 1px 3px #000, 0 0 8px #000; }
       #spells .orb.full { animation: orb-full 1.6s ease-in-out infinite; }
       #spells .orb.denied { animation: orb-shake .3s; }
-      @keyframes orb-wave { to { transform: rotate(360deg); } }
+      @keyframes orb-swirl { to { transform: rotate(360deg); } }
       @keyframes orb-full { 50% { box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 0 26px #4f6bffcc; } }
       @keyframes orb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 
