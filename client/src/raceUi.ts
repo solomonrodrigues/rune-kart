@@ -1,5 +1,5 @@
 // Race overlay: the big centre banner (lobby prompt, countdown, results) and the lap/place HUD line.
-export interface Standing { id: string; color: number; place: number; finishTime: number; lap: number; racing: boolean; ready: boolean }
+export interface Standing { id: string; color: number; place: number; finishTime: number; lap: number; racing: boolean; ready: boolean; bot: boolean }
 export interface RaceView { phase: 'lobby' | 'countdown' | 'racing' | 'results'; timer: number; laps: number; at: number; standings: Standing[] }
 
 const el = document.getElementById('banner')!;
@@ -20,9 +20,11 @@ export function renderRace(v: RaceView | null, myId: string, now: number, joinHi
 
   switch (v.phase) {
     case 'lobby': {
-      const ready = v.standings.filter(s => s.ready).length;
+      const humans = v.standings.filter(s => !s.bot), bots = v.standings.length - humans.length;
+      const ready = humans.filter(s => s.ready).length;
       show(`<p>${me?.ready ? 'Ready — waiting for the others' : 'Press <kbd>Enter</kbd> to ready up'}</p>` +
-        `<small>${ready}/${v.standings.length} ready · ${v.laps} laps</small>` +
+        `<small>${ready}/${humans.length} ready · ${v.laps} laps · ${bots} bot${bots === 1 ? '' : 's'}</small>` +
+        `<br><small><kbd>B</kbd> add a bot · <kbd>N</kbd> remove one</small>` +
         (joinHint ? `<br><small>${joinHint}</small>` : ''));
       return '';
     }
@@ -39,7 +41,7 @@ export function renderRace(v: RaceView | null, myId: string, now: number, joinHi
     case 'results':
       show('<p>Results</p><table>' +
         [...racers].sort((a, b) => a.place - b.place).map(s =>
-          `<tr${s.id === myId ? ' class="me"' : ''}><td>P${s.place}</td><td>${swatch(s.color)}${s.id === myId ? 'You' : ''}</td>` +
+          `<tr${s.id === myId ? ' class="me"' : ''}><td>P${s.place}</td><td>${swatch(s.color)}${s.id === myId ? 'You' : s.bot ? 'Bot' : ''}</td>` +
           `<td>${s.finishTime >= 0 ? formatTime(s.finishTime) : 'DNF'}</td></tr>`).join('') +
         `</table><small>Next race in ${Math.ceil(timer)}s</small>`);
       return '';

@@ -5,6 +5,7 @@ import { DT, stepKart, clampInput, newKart, resolveBumps, type KartState } from 
 import type { SeqInput } from 'shared/prediction';
 import { hasFinished, lapOf, startProgress, updateProgress, type Progress } from 'shared/race';
 import { MANA, spawnEffect, stepEffects, type Effect, type Spell } from 'shared/spells';
+import { Bot, randomProfile } from 'shared/bot';
 import { createTrack, spawnPoint, type Track } from 'shared/track';
 import { GREYBOX } from 'shared/tracks';
 
@@ -35,6 +36,7 @@ export class Kart extends Schema implements KartState {
   @type('number') lap = 1;
   @type('number') place = 0;
   @type('number') finishTime = -1; // race seconds, -1 until finished
+  @type('boolean') bot = false;     // driven by the server, not a player
 }
 
 export class SpellEffect extends Schema implements Effect {
@@ -73,6 +75,8 @@ export class RaceRoom extends Room<RaceState> {
   private track!: Track;
   private acc = 0;
   private nextEffectId = 1;
+  private bots = new Map<string, Bot>();
+  private botSeq = 0;
 
   onCreate() {
     this.track = createTrack(GREYBOX);
@@ -88,6 +92,12 @@ export class RaceRoom extends Room<RaceState> {
       q.push({ ...clampInput(msg), seq });
       if (q.length > QUEUE_MAX) q.shift();
     });
+    // Lobby only: add (+1) or remove (-1) a bot.
+    this.onMessage('bots', (_client, delta: unknown) => {
+      if (this.state.phase !== 'lobby') return;
+      if (delta === 1 && this.state.karts.size < MAX_PLAYERS) this.addBot();
+      if (delta === -1) { const last = [...this.bots.keys()].pop(); if (last) this.removeKart(last); }
+    });
     this.onMessage('ready', (client, ready: unknown) => {
       const kart = this.state.karts.get(client.sessionId);
       if (kart && this.state.phase === 'lobby') kart.ready = ready === true;
@@ -99,25 +109,52 @@ export class RaceRoom extends Room<RaceState> {
   }
 
   onJoin(client: Client) {
-    const used = new Set(this.slots.values());
-    let slot = 0;
-    while (used.has(slot)) slot++;
-    this.slots.set(client.sessionId, slot);
     this.queues.set(client.sessionId, []);
-    const kart = Object.assign(new Kart(), newKart(spawnPoint(this.track, slot)));
-    kart.lap = 1;
-    kart.color = KART_COLOURS[slot % KART_COLOURS.length];
-    this.state.karts.set(client.sessionId, kart);
+    this.addKart(client.sessionId);
   }
 
   onLeave(client: Client) {
-    this.state.karts.delete(client.sessionId);
-    for (const m of [this.queues, this.idle, this.slots, this.progress]) m.delete(client.sessionId);
+    this.removeKart(client.sessionId);
+  }
+
+  /** A kart on the next free grid slot. */
+  private addKart(id: string) {
+    const used = new Set(this.slots.values());
+    let slot = 0;
+    while (used.has(slot)) slot++;
+    this.slots.set(id, slot);
+    const kart = Object.assign(new Kart(), newKart(spawnPoint(this.track, slot)));
+    kart.lap = 1;
+    kart.color = KART_COLOURS[slot % KART_COLOURS.length];
+    this.state.karts.set(id, kart);
+    return kart;
+  }
+
+  private addBot() {
+    const id = `bot-${++this.botSeq}`;
+    const kart = this.addKart(id);
+    Object.assign(kart, { bot: true, ready: true }); // bots never hold up the start
+    this.bots.set(id, new Bot(randomProfile()));
+    this.maxClients = MAX_PLAYERS - this.bots.size;  // bots take player slots
+  }
+
+  private removeKart(id: string) {
+    this.state.karts.delete(id);
+    for (const m of [this.queues, this.idle, this.slots, this.progress, this.bots]) m.delete(id);
+    this.maxClients = MAX_PLAYERS - this.bots.size;
   }
 
   private tick() {
     const frozen = this.state.phase === 'countdown';
+    const all = [...this.state.karts.values()];
     this.state.karts.forEach((kart, id) => {
+      const bot = this.bots.get(id);
+      if (bot) {
+        const input = frozen ? IDLE_INPUT : bot.input(kart, this.track, all.filter(o => o !== kart), DT);
+        const spell = stepKart(kart, input, this.track, DT);
+        if (spell) this.cast(id, kart, spell);
+        return;
+      }
       const q = this.queues.get(id)!;
       if (q.length) {
         // One input per tick normally; after a stall, drain the backlog faster so latency doesn't stick.
@@ -160,7 +197,10 @@ export class RaceRoom extends Room<RaceState> {
     const racers = [...st.karts.entries()].filter(([, k]) => k.racing);
     switch (st.phase) {
       case 'lobby':
-        if (st.karts.size && [...st.karts.values()].every(k => k.ready)) this.startCountdown();
+        { // Start once every human is ready (bots are always ready).
+          const humans = [...st.karts.values()].filter(k => !k.bot);
+          if (humans.length && humans.every(k => k.ready)) this.startCountdown();
+        }
         break;
       case 'countdown':
         st.timer -= DT;
@@ -192,7 +232,7 @@ export class RaceRoom extends Room<RaceState> {
         if (st.timer <= 0) {
           st.phase = 'lobby';
           st.timer = 0;
-          st.karts.forEach(k => { k.ready = false; k.racing = false; k.manaRegenMul = 1; });
+          st.karts.forEach(k => { k.ready = k.bot; k.racing = false; k.manaRegenMul = 1; });
         }
         break;
     }

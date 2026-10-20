@@ -150,6 +150,7 @@ if (!OFFLINE) {
   addEventListener('keydown', e => {
     const me = race?.standings.find(s => s.id === myId);
     if (e.code === 'Enter' && race?.phase === 'lobby' && connected) room.send('ready', !me?.ready);
+    if ((e.code === 'KeyB' || e.code === 'KeyN') && !e.repeat && race?.phase === 'lobby' && connected) room.send('bots', e.code === 'KeyB' ? 1 : -1);
   });
   send = input => delayed(() => { if (connected) room.send('input', input); });
 
@@ -167,7 +168,7 @@ if (!OFFLINE) {
     const standings: Standing[] = [];
     state.karts.forEach((k: any, id: string) => {
       snap.push([id, copyKart(newKart(k), k), k.ack, k.color]);
-      standings.push({ id, color: k.color, place: k.place, finishTime: k.finishTime, lap: k.lap, racing: k.racing, ready: k.ready });
+      standings.push({ id, color: k.color, place: k.place, finishTime: k.finishTime, lap: k.lap, racing: k.racing, ready: k.ready, bot: k.bot });
     });
     const view = { phase: state.phase, timer: state.timer, laps: state.laps, standings };
     const fx: Effect[] = [];

@@ -16,7 +16,7 @@ Open `/?offline` to drive solo with the sim running locally (no network). In off
 
 Online, your kart is predicted locally and reconciled against the server; other karts are drawn 100 ms in the past between server snapshots. Add `?lag=150` to simulate a 150 ms round trip on localhost.
 
-Racing: everyone presses Enter in the lobby to ready up, then a 3 s countdown, 3 laps (`LAPS=1 docker compose up -d` for quick test races), results for 10 s, and back to the lobby. Once you finish, your kart drives itself and the camera swings round to the front while the others finish. Add `?autopilot` to have it drive for you the whole race (handy for testing solo).
+Racing: press B / N in the lobby to add or remove bots, then everyone presses Enter to ready up, then a 3 s countdown, 3 laps (`LAPS=1 docker compose up -d` for quick test races), results for 10 s, and back to the lobby. Once you finish, your kart drives itself and the camera swings round to the front while the others finish. Add `?autopilot` to have it drive for you the whole race (handy for testing solo).
 
 Spells: your mana orb (bottom left) refills over time, faster while drifting and when you're behind. Keys 1–4 cast **Haste** (boost), **Smite** (forward projectile, spins out the kart it hits), **Snare** (a rune trap dropped behind you) and **Ward** (blocks the next hit). Costs and cooldowns live in `shared/src/spells.ts`.
 
