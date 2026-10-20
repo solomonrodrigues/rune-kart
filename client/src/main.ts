@@ -7,7 +7,7 @@ import { createTrack, spawnPoint } from 'shared/track';
 import { GREYBOX } from 'shared/tracks';
 import { KartModel } from './KartModel';
 import { EffectsView } from './effects';
-import { renderSpells } from './spellUi';
+import { deniedCast, renderSpells } from './spellUi';
 import { NO_CAST, SPELLS, spawnEffect, stepEffects, type Effect } from 'shared/spells';
 import { buildScene, MOON_DIR } from './scene';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -225,9 +225,11 @@ renderer.setAnimationLoop(now => {
   acc = Math.min(acc + dt, 0.25);
   while (acc >= DT) {
     copyKart(localPrev, local);
-    send(predictor.step({ ...input, cast: frozen ? NO_CAST : pendingCast }));
+    const tried = frozen ? NO_CAST : pendingCast;
+    send(predictor.step({ ...input, cast: tried }));
     pendingCast = NO_CAST;
     const spell = predictor.lastCast;
+    if (tried !== NO_CAST && !spell) deniedCast(tried);
     if (spell) {
       effects.burst(local.x, local.y, local.z, spell.color);
       const e = OFFLINE && spawnEffect(offlineFxId++, spell, 'local', local);

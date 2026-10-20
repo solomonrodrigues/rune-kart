@@ -19,17 +19,37 @@
       #banner tr.me { color: #ffd98a; }
       #banner i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; box-shadow: 0 0 0 1px #0008; }
       #banner kbd { font: inherit; padding: 0 6px; border: 1px solid var(--bronze-hi); border-radius: 3px; background: #0006; }
-      #spells { position: fixed; left: 12px; bottom: 12px; display: flex; align-items: flex-end; gap: 8px; font: 12px var(--serif); color: var(--gold); pointer-events: none; }
-      #spells .orb { position: relative; width: 88px; height: 88px; border-radius: 50%; overflow: hidden; background: radial-gradient(circle at 50% 40%, #1a1030, #05030c); border: 4px solid var(--bronze); box-shadow: 0 0 0 2px #2a1d10, inset 0 0 12px #000, 0 0 18px #3b55ff55; }
-      #spells .orb .fill { position: absolute; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 35% 30%, #9fc0ff, #2d4fe0 50%, #0e1a70); transition: height .1s linear; }
-      #spells .orb span { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; font-size: 17px; color: #f2ecff; text-shadow: 0 1px 3px #000; }
-      #spells .slot { position: relative; width: 66px; padding: 7px 4px 6px; border-radius: 4px; background: var(--panel); border: 2px solid var(--bronze); box-shadow: inset 0 3px 0 var(--c), 0 0 10px #0008; text-align: center; overflow: hidden; }
-      #spells .slot b { display: block; font-size: 11px; line-height: 1.2; font-variant: small-caps; letter-spacing: .04em; }
-      #spells .slot small { color: #9fb8ff; }
-      #spells .slot kbd { position: absolute; top: 3px; left: 4px; font: 700 10px var(--serif); color: var(--bronze-hi); }
-      #spells .slot .cd { position: absolute; left: 0; right: 0; bottom: 0; background: #000c; }
-      #spells .slot.off { opacity: .45; }
-      @media (max-width: 520px) { #spells .slot { width: 52px; } #spells .orb { width: 66px; height: 66px; } }
+      /* Mana orb: dark glass sphere in a bronze frame, liquid with a rolling surface, gloss on top. */
+      #spells { position: fixed; left: 14px; bottom: 14px; display: flex; align-items: flex-end; gap: 12px; font: 12px var(--serif); color: var(--gold); pointer-events: none; }
+      #spells .orb { position: relative; width: 104px; height: 104px; border-radius: 50%; overflow: hidden; background: #07050f;
+        border: 5px solid var(--bronze); box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 6px 16px #000a; }
+      #spells .orb .liquid { position: absolute; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 40% 85%, #6f8dff, #2441d6 45%, #0d1670 90%); transition: height .15s linear; }
+      /* A huge rotating rounded square in the empty colour; its edge dips into the liquid as a wave. */
+      #spells .orb .wave { position: absolute; left: 50%; bottom: calc(100% - 7px); width: 220px; height: 220px; margin-left: -110px; border-radius: 43%; background: #07050f; animation: orb-wave 7s linear infinite; }
+      #spells .orb .glass { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 26%, #ffffff55, #ffffff10 22%, transparent 40%), radial-gradient(circle at 50% 120%, transparent 55%, #0008); }
+      #spells .orb span { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; font-size: 19px; color: #f2ecff; text-shadow: 0 1px 3px #000, 0 0 8px #000; }
+      #spells .orb.full { animation: orb-full 1.6s ease-in-out infinite; }
+      #spells .orb.denied { animation: orb-shake .3s; }
+      @keyframes orb-wave { to { transform: rotate(360deg); } }
+      @keyframes orb-full { 50% { box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 0 26px #4f6bffcc; } }
+      @keyframes orb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+      /* Spell slots: glyph, name, cost; glow in the spell's colour when castable; radial cooldown sweep. */
+      #spells .bar { display: flex; gap: 8px; padding: 7px; background: linear-gradient(#1a1220e6, #0b0710e6); border: 2px solid var(--bronze); border-radius: 6px; box-shadow: 0 0 0 1px #1c120a, 0 6px 16px #000a; }
+      #spells .slot { position: relative; width: 62px; height: 70px; border-radius: 5px; background: radial-gradient(circle at 50% 35%, #2a1f30, #120c16); border: 1px solid #8a6a3a99; text-align: center; overflow: hidden; transition: box-shadow .2s, border-color .2s; }
+      #spells .slot svg { display: block; width: 28px; height: 28px; margin: 9px auto 3px; fill: none; stroke: var(--c); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: .55; transition: opacity .2s, filter .2s; }
+      #spells .slot b { display: block; font-size: 11px; line-height: 1; font-variant: small-caps; letter-spacing: .05em; color: #cdbb8f; }
+      #spells .slot kbd { position: absolute; top: 3px; left: 5px; font: 700 10px var(--serif); color: var(--bronze-hi); }
+      #spells .slot .cost { position: absolute; top: 3px; right: 5px; font-size: 10px; color: #8fb0ff; }
+      #spells .slot .cost::before { content: '◆'; font-size: 7px; margin-right: 2px; vertical-align: 1px; }
+      #spells .slot.ready { border-color: var(--c); box-shadow: inset 0 0 12px color-mix(in srgb, var(--c) 35%, transparent), 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); }
+      #spells .slot.ready svg { opacity: 1; filter: drop-shadow(0 0 4px var(--c)); }
+      #spells .slot.ready b { color: var(--gold); }
+      #spells .slot.poor .cost { color: #ff6b6b; }
+      #spells .slot .cd { position: absolute; inset: 0; display: grid; place-items: center; background: conic-gradient(#000b calc(var(--cd, 0) * 360deg), transparent 0); font-size: 15px; font-weight: 700; color: #fff; text-shadow: 0 0 4px #000; }
+      #spells .slot.denied { animation: slot-denied .35s; }
+      @keyframes slot-denied { 0%, 60% { border-color: #ff4040; box-shadow: inset 0 0 16px #ff404088, 0 0 10px #ff4040aa; } }
+      @media (max-width: 560px) { #spells { gap: 8px; } #spells .orb { width: 76px; height: 76px; } #spells .slot { width: 50px; height: 60px; } #spells .slot svg { width: 22px; height: 22px; margin-top: 8px; } }
     </style>
   </head>
   <body>
