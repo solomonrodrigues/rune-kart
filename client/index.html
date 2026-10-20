@@ -34,10 +34,10 @@
       #spells .orb .liquid::before { content: ''; position: absolute; left: 0; right: 0; top: 3px; height: 2px; background: linear-gradient(90deg, #0000, #c3d0ffcc, #0000); z-index: 1; }
       #spells .orb .glass { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 26%, #ffffff55, #ffffff10 22%, transparent 40%), radial-gradient(circle at 50% 120%, transparent 55%, #0008); }
       #spells .orb span { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; font-size: 19px; color: #f2ecff; text-shadow: 0 1px 3px #000, 0 0 8px #000; }
-      #spells .orb.full { animation: orb-full 1.6s ease-in-out infinite; }
+      #spells .orb.full { animation: orb-full 2.4s ease-in-out infinite; }
       #spells .orb.denied { animation: orb-shake .3s; }
       @keyframes orb-swirl { to { transform: rotate(360deg); } }
-      @keyframes orb-full { 50% { box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 0 26px var(--mana-glow, #4f6bffcc); } }
+      @keyframes orb-full { 50% { box-shadow: 0 0 0 2px #1c120a, 0 0 0 4px #a8834a, inset 0 0 18px #000, 0 0 14px var(--mana-glow, #4f6bff88); } }
       @keyframes orb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 
       /* Spell slots: glyph, name, cost; glow in the spell's colour when castable; radial cooldown sweep. */

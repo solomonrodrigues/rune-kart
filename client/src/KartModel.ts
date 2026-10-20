@@ -34,6 +34,8 @@ export class KartModel {
   private ward: THREE.Mesh;
   private driver = new Monkey();
   private banner = new THREE.Group();
+  private flag!: THREE.BufferAttribute;   // flag vertex positions, rewritten each frame to make it wave
+  private flagBase!: Float32Array;        // the flat flag those waves are applied to
   // Mana tank on the back: the liquid is clipped by a world-horizontal plane, so it reads the kart's mana
   // and stays level however the kart tilts.
   private tank = new THREE.Group();
@@ -85,10 +87,17 @@ export class KartModel {
 
     // Tattered banner in the player's colour on a pole at the back.
     add(new THREE.CylinderGeometry(0.03, 0.03, 1.9, 4), iron, -0.42, 1.3, -0.92);
-    const flagShape = new THREE.Shape([[0, 0], [0.75, 0], [0.58, -0.32], [0.75, -0.68], [0, -0.68]].map(([x, y]) => new THREE.Vector2(x, y)));
+    // Built as a strip of segments (x = distance from the pole) so it can ripple; the free end is notched.
+    const flagGeo = new THREE.PlaneGeometry(0.75, 0.68, 6, 2).translate(0.375, -0.34, 0);
+    this.flag = flagGeo.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < this.flag.count; i++) {
+      if (this.flag.getX(i) > 0.74 && Math.abs(this.flag.getY(i) + 0.34) < 0.01) this.flag.setX(i, 0.58);
+    }
+    this.flagBase = Float32Array.from(this.flag.array as Float32Array);
     this.banner.position.set(-0.42, 2.2, -0.92);
     this.body.add(this.banner);
-    add(new THREE.ShapeGeometry(flagShape).rotateY(Math.PI / 2), new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide, flatShading: true }), 0, 0, 0, this.banner);
+    add(flagGeo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide, flatShading: true }), 0, 0, 0, this.banner)
+      .rotation.y = Math.PI / 2; // streams out behind the pole
 
     // Iron-rimmed wooden wheels with spiked hubs.
     const rimGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 8).rotateZ(Math.PI / 2);
@@ -146,8 +155,8 @@ export class KartModel {
     this.ward.visible = false;
 
     // Glass mana tank in an iron cage behind the seat, where the chase camera can see it.
-    this.manaGlow.copy(hdr(color, 1.7));
-    this.manaFull.set(color).lerp(new THREE.Color(0xffffff), 0.3).multiplyScalar(2.0);
+    this.manaGlow.copy(hdr(color, 1.2));
+    this.manaFull.set(color).lerp(new THREE.Color(0xffffff), 0.1).multiplyScalar(1.4); // only a touch brighter when full
     this.liquidMat.color.copy(this.manaGlow);
     const tankIron = flat(0x5f6069);
     this.tank.position.set(0, 0.98, -1.0);
@@ -199,7 +208,14 @@ export class KartModel {
     this.driver.update(k.steer);
     // Banner streams back with speed and flutters.
     const pace = Math.abs(speed);
-    this.banner.rotation.set(0, Math.sin(time * 9 + this.root.id) * 0.25 * Math.min(1, pace / 10 + 0.3), -Math.min(0.5, pace * 0.02));
+    // Ripple the flag along its length: nothing moves at the pole edge, more towards the free end and with speed.
+    const amp = 0.04 + Math.min(0.1, pace * 0.005);
+    for (let i = 0; i < this.flag.count; i++) {
+      const u = this.flagBase[i * 3] / 0.75;
+      this.flag.setZ(i, Math.sin(time * 8 + this.root.id - u * 5) * u * amp);
+    }
+    this.flag.needsUpdate = true;
+    this.banner.rotation.y = Math.sin(time * 2.3 + this.root.id) * 0.12; // a slow swing about the pole itself
 
     // Sparks only once a boost is banked: blue, orange, then purple.
     const tier = driftTier(k);
@@ -220,7 +236,7 @@ export class KartModel {
     this.tank.getWorldPosition(this.tankPos);
     const level = Math.min(1, Math.max(0, k.mana / MANA.max));
     this.surface.constant = this.tankPos.y - TANK_R + level * 2 * TANK_R + (level >= 1 ? 0.05 : 0);
-    if (level >= 1) this.liquidMat.color.copy(this.manaFull).multiplyScalar(1 + 0.1 * Math.sin(time * 4)); // full: brighter, pulsing
+    if (level >= 1) this.liquidMat.color.copy(this.manaFull).multiplyScalar(1 + 0.05 * Math.sin(time * 3)); // full: a gentle pulse
     else this.liquidMat.color.copy(this.manaGlow);
   }
 

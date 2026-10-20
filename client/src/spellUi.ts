@@ -56,7 +56,7 @@ export function setManaColour(hex: number) {
   orb.style.setProperty('--mana-hi', mix(0.4, 255));
   orb.style.setProperty('--mana', mix(0, 0));
   orb.style.setProperty('--mana-lo', mix(0.7, 0));
-  orb.style.setProperty('--mana-glow', `rgb(${rgb.join(',')} / .8)`);
+  orb.style.setProperty('--mana-glow', `rgb(${rgb.join(',')} / .5)`);
 }
 
 /** A cast was refused (not enough mana, cooling down, or stunned): flash the slot and shake the orb. */
