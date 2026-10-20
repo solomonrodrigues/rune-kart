@@ -228,3 +228,72 @@ export class RuneBurst {
     for (const r of this.rings) (r.mesh.material as THREE.Material).dispose();
   }
 }
+
+/** A thin bar from (x1, y1) to (x2, y2) in the XY plane. */
+function bar(x1: number, y1: number, x2: number, y2: number, w: number) {
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  return new THREE.BoxGeometry(len, w, 0.01).rotateZ(Math.atan2(y2 - y1, x2 - x1)).translate((x1 + x2) / 2, (y1 + y2) / 2, 0);
+}
+const polar = (r: number, a: number): [number, number] => [Math.cos(a) * r, Math.sin(a) * r];
+
+/** The sigil's two halves, in the XY plane: an outer ring of rune marks, and an inner ring around a hexagram. */
+function sigilGeometry() {
+  const outer: THREE.BufferGeometry[] = [new THREE.TorusGeometry(0.42, 0.034, 3, 32)];
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    if (i % 3 === 0) outer.push(bar(...polar(0.32, a), ...polar(0.4, a), 0.04));                               // a stroke
+    else if (i % 3 === 1) outer.push(bar(...polar(0.33, a - 0.1), ...polar(0.39, a), 0.034), bar(...polar(0.39, a), ...polar(0.33, a + 0.1), 0.034)); // a chevron
+    else outer.push(bar(...polar(0.345, a - 0.03), ...polar(0.375, a + 0.03), 0.05));                            // a dot
+  }
+  const inner: THREE.BufferGeometry[] = [new THREE.TorusGeometry(0.3, 0.028, 3, 28)];
+  for (const start of [Math.PI / 2, -Math.PI / 2]) // two triangles: a hexagram
+    for (let i = 0; i < 3; i++) {
+      const a = start + (i / 3) * Math.PI * 2, b = start + ((i + 1) / 3) * Math.PI * 2;
+      inner.push(bar(...polar(0.3, a), ...polar(0.3, b), 0.032));
+    }
+  const merge = (parts: THREE.BufferGeometry[]) => mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p));
+  return [merge(outer), merge(inner)];
+}
+
+/**
+ * A rune sigil at the exhaust, the boost's magical source: it flares in when a boost fires, its two rings
+ * counter-rotating, holds while the boost lasts, then lingers a moment after the blast and fades.
+ */
+export class Sigil {
+  readonly group = new THREE.Group();
+  private parts: THREE.Mesh[];
+  private material = new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  private pop = 1;      // 0 → 1 over the flare-in
+  private after = 9;    // seconds since the boost ended
+  static LINGER = 0.35; // held at full after the boost ends…
+  static FADE = 0.3;    // …then fades over this
+
+  constructor() {
+    this.parts = sigilGeometry().map(g => new THREE.Mesh(g, this.material));
+    this.group.add(...this.parts);
+    this.group.visible = false;
+  }
+
+  /** A new boost fired: flare in from large. */
+  fire() { this.pop = 0; }
+
+  update(dt: number, boosting: boolean, colour: THREE.Color) {
+    this.after = boosting ? 0 : this.after + dt;
+    const fade = 1 - Math.min(1, Math.max(0, (this.after - Sigil.LINGER) / Sigil.FADE));
+    this.group.visible = fade > 0;
+    if (!this.group.visible) return;
+    this.pop = Math.min(1, this.pop + dt / 0.18);
+    const ease = 1 - (1 - this.pop) ** 3;
+    this.group.scale.setScalar(1.45 * (1.4 - 0.4 * ease)); // ~1.2 m across: readable from the chase camera
+    // Kept just under the bloom threshold (0.55), so the glyph reads crisply instead of blooming into a disc;
+    // it flares past it for a moment as it appears.
+    this.material.color.copy(colour).multiplyScalar(fade * (0.17 + 0.25 * (1 - ease)));
+    this.parts[0].rotation.z += dt * 1.2;
+    this.parts[1].rotation.z -= dt * 2;
+  }
+
+  dispose() {
+    for (const p of this.parts) p.geometry.dispose();
+    this.material.dispose();
+  }
+}

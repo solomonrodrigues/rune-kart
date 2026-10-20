@@ -3,7 +3,7 @@ import { driftTier, KART, type KartState } from 'shared/kart';
 import { MANA, SPELLS } from 'shared/spells';
 import { Monkey } from './Monkey';
 import { mergeStatic } from './mergeStatic';
-import { Motes, RuneBurst, Trail } from './arcane';
+import { Motes, RuneBurst, Sigil, Trail } from './arcane';
 
 const flat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 // Over-bright (HDR) colours: anything past the bloom threshold glows, so every spark tier, the boost
@@ -39,11 +39,13 @@ export class KartModel {
   private trails = [0, 1, 2, 3].map(() => new Trail());
   private twist = 0;
   private burst = new RuneBurst();
+  private sigil = new Sigil();             // the rune sigil at the exhaust, the boost's source
   private moteDebt = 0;                    // fractional motes owed, so emission rate doesn't depend on frame rate
   private lastBoost = 0;
   private v1 = new THREE.Vector3();
   private v2 = new THREE.Vector3();
   private fwdW = new THREE.Vector3();
+  private dim = new THREE.Color();
   private rightW = new THREE.Vector3();
   private carryV = new THREE.Vector3();
   private ward: THREE.Mesh;
@@ -134,9 +136,11 @@ export class KartModel {
       new THREE.IcosahedronGeometry(0.2, 1),
       new THREE.MeshBasicMaterial({ color: HASTE.clone(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
-    this.core.position.set(0, 0.5, -1.15);
+    this.core.position.set(0, 0.62, -1.15);
     this.core.visible = false;
     this.body.add(this.core);
+    this.sigil.group.position.set(0, 0.62, -1.3); // just behind the orb, so it glows in the sigil's centre
+    this.body.add(this.sigil.group);
     this.fx.add(this.motes.points, ...this.trails.map(t => t.mesh), this.burst.group);
 
     // Headlights: glowing lamps and faint beams through the dusk. (Light on the road comes from your own
@@ -264,24 +268,28 @@ export class KartModel {
     const colour = k.boostTier ? TIER[k.boostTier] : HASTE;
     const boost = Math.min(1, k.boostTime / KART.boostTimes[0]);
     this.core.visible = boost > 0;
-    (this.core.material as THREE.MeshBasicMaterial).color.copy(colour);
-    this.core.scale.setScalar(0.6 + 0.7 * boost * (1 + 0.2 * Math.sin(time * 25)));
+    // Orb and comet tail dimmed so the sigil behind them still reads mid-boost.
+    (this.core.material as THREE.MeshBasicMaterial).color.copy(colour).multiplyScalar(0.25);
+    this.core.scale.setScalar(0.5 + 0.35 * boost * (1 + 0.2 * Math.sin(time * 25))); // small enough to sit inside the sigil
     if (boost > 0) {
       this.core.getWorldPosition(this.v1);
-      if (k.boostTime > this.lastBoost + 0.05) this.burst.fire(this.v1, this.fwdW, colour); // a new boost just fired
-      this.moteDebt += 100 * dt;
+      if (k.boostTime > this.lastBoost + 0.05) { this.burst.fire(this.v1, this.fwdW, colour); this.sigil.fire(); } // a new boost just fired
+      this.v1.addScaledVector(this.fwdW, -0.25); // the tail starts just behind the sigil, not across its face
+      this.dim.copy(colour).multiplyScalar(0.45);
+      this.moteDebt += 70 * dt;
       for (; this.moteDebt >= 1; this.moteDebt--) {
         // Mostly the kart's own velocity: the tail stays a short comet behind the cart rather than a streak
         // stretching back under the camera at full boost speed.
         const vel = this.v2.copy(this.fwdW).multiplyScalar(-(2 + rand() * 3));
         vel.x += k.vx * 0.8 + (rand() - 0.5) * 1.2; vel.y += (rand() - 0.3) * 1.2; vel.z += k.vz * 0.8 + (rand() - 0.5) * 1.2;
-        this.motes.spawn(this.v1, vel, colour, 0.25 + rand() * 0.2);
+        this.motes.spawn(this.v1, vel, this.dim, 0.25 + rand() * 0.2);
       }
     }
     this.lastBoost = k.boostTime;
     this.motes.update(dt);
     for (const t of this.trails) t.update(dt);
     this.burst.update(dt);
+    this.sigil.update(dt, boost > 0, colour);
 
     // Mana tank level: a world-horizontal surface at the right height through the tank.
     this.tank.getWorldPosition(this.tankPos);
@@ -295,6 +303,7 @@ export class KartModel {
     this.motes.dispose();
     for (const t of this.trails) t.dispose();
     this.burst.dispose();
+    this.sigil.dispose();
     this.root.traverse(o => {
       if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
     });
