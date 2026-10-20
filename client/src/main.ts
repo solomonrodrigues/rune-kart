@@ -196,14 +196,16 @@ let offlineFxId = 1;
 const local = predictor.state;
 const localPrev = copyKart(newKart(local), local); // state one step back, for render interpolation
 const localView = newKart(local); // scratch: the local kart as drawn
-const localModel = new KartModel(myColor, false);
+const localModel = new KartModel(myColor, true); // local: no lamps or beams shining back at your camera
 setManaColour(myColor); // your orb matches your kart's tank
 scene.add(localModel.root);
 // A real headlight for your own kart only: it lights walls and trees, and one fixed light keeps shaders cheap
 // (every kart still gets glowing lamps).
 const headlight = new THREE.SpotLight(0xffe2b0, 45, 50, 0.55, 0.9, 1.3); // soft-edged so it blends with the beams
-headlight.position.set(0, 0.8, 1.2);
-headlight.target.position.set(0, 0, 14);
+// Mounted ahead of the ram and horns: a spot right next to the kart lights its own parts blindingly bright
+// when the body slides mid-drift.
+headlight.position.set(0, 0.8, 2.2);
+headlight.target.position.set(0, 0, 15);
 localModel.root.add(headlight, headlight.target);
 // Visual-only offset that absorbs reconciliation corrections and decays to zero.
 const correction = { x: 0, y: 0, z: 0, yaw: 0 };

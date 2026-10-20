@@ -48,8 +48,11 @@ export class KartModel {
   private slide = 0;
   private wheelSpin = 0;
 
-  /** `beams`: off for your own kart — seen from the chase camera they wash out the view, and it has a real spotlight. */
-  constructor(color: number, beams = true) {
+  /**
+   * `isLocal`: your own kart skips its glowing lamps and beams — from the chase camera (especially mid-drift)
+   * they shine back at you, and your kart lights the road with a real spotlight instead.
+   */
+  constructor(color: number, isLocal = false) {
     // A dark-fantasy war cart: wooden deck, iron armour and spikes, a ram with bone horns, spiked wheels,
     // and the player's colour on its glowing runes and banner (so karts stay easy to tell apart).
     // Albedos are kept fairly light: the world is lit by moonlight, so true-dark materials vanish.
@@ -129,7 +132,8 @@ export class KartModel {
 
     // Headlights: glowing lamps and faint beams through the dusk. (Light on the road comes from your own
     // kart's spotlight, which follows ramps; a flat decal here would cut into them.)
-    const lampMat = new THREE.MeshBasicMaterial({ color: hdr(0xffe7b8, 2.2) });
+    // Single-sided discs facing forward: they glow at whoever's in front, never back at the driver's camera.
+    const lampMat = new THREE.MeshBasicMaterial({ color: hdr(0xffe7b8, 2.2), side: THREE.FrontSide });
     const beamMat = new THREE.MeshBasicMaterial({
       vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
     });
@@ -137,14 +141,13 @@ export class KartModel {
       // Iron lantern housings either side of the ram.
       const housing = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.2), flat(0x5f6069));
       housing.position.set(x, 0.66, 0.98);
-      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 6).rotateX(Math.PI / 2), lampMat);
-      lamp.position.set(x, 0.66, 1.1);
+      const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.1, 6), lampMat); // faces +z
+      lamp.position.set(x, 0.66, 1.09); // just proud of the housing's front face
       this.body.add(housing);
       const ray = new THREE.Mesh(beam(12, 1.7), beamMat);
       ray.position.set(x, 0.66, 1.14);
       ray.rotation.set(0.07, x * 0.15, 0); // dipped slightly, splayed a touch outwards
-      this.body.add(lamp);
-      if (beams) this.body.add(ray);
+      if (!isLocal) this.body.add(lamp, ray);
     }
 
     this.ward = new THREE.Mesh(
