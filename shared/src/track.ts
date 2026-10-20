@@ -27,6 +27,7 @@ export interface Track {
   wallBVH: MeshBVH;
   groundBVH: MeshBVH;
   samples: TrackSample[]; // centreline, used for spawns and respawns
+  outer: number;          // ±1: which side of the centreline (along the right vector) has the outer wall
 }
 
 export const GROUND_Y = -0.1;
@@ -71,21 +72,21 @@ export function createTrack(def: TrackDef): Track {
     // a=L_i b=R_i c=L_j d=R_j → right × tangent = up-facing triangles
     quad(road, L(i), R(i), L(j), R(j));
     const stripe = Math.floor(i / 2) % 2;
-    colour(roadCol, i < 2 ? [0.95, 0.95, 0.95] : stripe ? [0.33, 0.33, 0.36] : [0.29, 0.29, 0.32], 6);
+    colour(roadCol, stripe ? [0.33, 0.31, 0.36] : [0.28, 0.27, 0.31], 6); // dark cobbles; stripes still show speed
 
     const edge = (k: number, side: number) => centres[k].clone().addScaledVector(rights[k], side * half);
     const at = (v: Vector3, y: number) => new Vector3(v.x, y, v.z);
     // Outer wall: ground to wallHeight above the road.
     const oi = edge(i, outer), oj = edge(j, outer);
     quad(walls, at(oi, GROUND_Y), at(oj, GROUND_Y), at(oi, oi.y + def.wallHeight), at(oj, oj.y + def.wallHeight));
-    colour(wallCol, stripe ? [0.8, 0.2, 0.2] : [0.92, 0.92, 0.92], 6);
+    colour(wallCol, stripe ? [0.4, 0.38, 0.44] : [0.47, 0.45, 0.51], 6); // weathered stone blocks
     // Inner embankment, kept 0.3 below road level so karts can drive off the edge without snagging it.
     const ii = edge(i, -outer), ij = edge(j, -outer);
     if (ii.y > 0.3 || ij.y > 0.3) {
       quad(walls, at(ii, GROUND_Y), at(ij, GROUND_Y), at(ii, Math.max(GROUND_Y, ii.y - 0.3)), at(ij, Math.max(GROUND_Y, ij.y - 0.3)));
-      colour(wallCol, [0.55, 0.45, 0.35], 6);
+      colour(wallCol, [0.33, 0.29, 0.3], 6);
       quad(trim, at(ii, Math.max(GROUND_Y, ii.y - 0.3)), at(ij, Math.max(GROUND_Y, ij.y - 0.3)), ii, ij);
-      colour(trimCol, [0.55, 0.45, 0.35], 6);
+      colour(trimCol, [0.33, 0.29, 0.3], 6);
     }
   }
 
@@ -104,6 +105,7 @@ export function createTrack(def: TrackDef): Track {
     def, road: roadGeo, walls: wallGeo, trim: geo(trim, trimCol), ground: groundGeo,
     roadBVH: new MeshBVH(roadGeo), wallBVH: new MeshBVH(wallGeo), groundBVH: new MeshBVH(groundGeo),
     samples,
+    outer,
   };
 }
 

@@ -9,7 +9,11 @@ import { KartModel } from './KartModel';
 import { EffectsView } from './effects';
 import { renderSpells } from './spellUi';
 import { NO_CAST, SPELLS, spawnEffect, stepEffects, type Effect } from 'shared/spells';
-import { buildScene } from './scene';
+import { buildScene, MOON_DIR } from './scene';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { renderRace, type RaceView, type Standing } from './raceUi';
 
 const OFFLINE = new URLSearchParams(location.search).has('offline');
@@ -22,11 +26,19 @@ renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
 const track = createTrack(GREYBOX);
-const { scene, sun } = buildScene(track);
+const { scene, sun, update: updateScene } = buildScene(track);
 const effects = new EffectsView(scene);
 const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 600);
+// Bloom makes the bright, unlit things (runes, crystals, spells, the moon) glow against the dark.
+// A multisampled target keeps the antialiasing the plain renderer had.
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { samples: 4, type: THREE.HalfFloatType }));
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.85, 0.45, 0.55)); // strength, radius, threshold
+composer.addPass(new OutputPass());
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
+  composer.setPixelRatio(renderer.getPixelRatio());
+  composer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
 }
@@ -193,7 +205,7 @@ Object.assign(window, { KART, me: local, correction, predictor });
 
 // --- Camera ---
 let camYaw = local.yaw;
-const camPos = new THREE.Vector3(), lookAt = new THREE.Vector3();
+const camPos = new THREE.Vector3(), lookAt = new THREE.Vector3(), focus = new THREE.Vector3();
 
 let acc = 0;
 let last = performance.now();
@@ -255,8 +267,11 @@ renderer.setAnimationLoop(now => {
   camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt));
   camera.updateProjectionMatrix();
 
-  sun.position.set(k.x + 30, k.y + 50, k.z + 20);
+  // Moonlight comes from where the moon is in the sky, centred on the player for sharp shadows.
+  sun.position.set(k.x + MOON_DIR.x * 70, k.y + MOON_DIR.y * 70, k.z + MOON_DIR.z * 70);
   sun.target.position.set(k.x, k.y, k.z);
+  focus.set(k.x, k.y, k.z);
+  updateScene(camera, focus, dt, now / 1000);
 
   const tier = driftTier(k);
   const racers = remotes.size + 1;
@@ -266,5 +281,5 @@ renderer.setAnimationLoop(now => {
     (k.driftDir ? ` · drift ${'●'.repeat(tier)}${'○'.repeat(3 - tier)}` : '') +
     (k.boostTime > 0 ? ' · BOOST' : '') +
     `<br><small>${OFFLINE ? 'offline' : `${racers} racer${racers === 1 ? '' : 's'}${LAG ? ` · lag ${LAG}ms` : ''}`} · WASD drive · Space/Shift drift · 1–4 spells · C look back</small>`;
-  renderer.render(scene, camera);
+  composer.render(dt);
 });
