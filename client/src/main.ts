@@ -71,7 +71,7 @@ renderer.localClippingEnabled = true; // mana tanks clip their liquid to the man
 document.body.appendChild(renderer.domElement);
 
 const track = createTrack(trackDef(joined ? joined.state.track : params.get('track')));
-const { scene, sun, update: updateScene } = buildScene(track);
+const { scene, sun, update: updateScene, setBloodMoon } = buildScene(track);
 const effects = new EffectsView(scene);
 const minimap = new Minimap(track);
 const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 600);
@@ -396,6 +396,8 @@ renderer.setAnimationLoop(now => {
   sun.position.set(k.x + MOON_DIR.x * 70, k.y + MOON_DIR.y * 70, k.z + MOON_DIR.z * 70);
   sun.target.position.set(k.x, k.y, k.z);
   focus.set(k.x, k.y, k.z);
+  // The blood moon rises once anyone reaches the final lap, and sets when the race ends.
+  setBloodMoon(race?.phase === 'racing' && race.standings.some(s => s.racing && s.lap >= race!.laps));
   updateScene(camera, focus, dt, now / 1000);
 
   const tier = driftTier(k);

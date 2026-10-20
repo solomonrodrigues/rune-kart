@@ -95,6 +95,7 @@ export function buildMountains(rand: () => number) {
   // foot sunk below the near ridge so the nearer mountains hide its base.
   const a = RANGES[2].notch!, between = (RANGES[1].radius + RANGES[2].radius) / 2;
   const ridge = near!.h(a, 0);
-  g.add(castle(new THREE.Vector3(Math.cos(a) * between, ridge - 6, Math.sin(a) * between), Math.PI / 2 - a)); // windows (−z) face the track
-  return g;
+  const castleAt = new THREE.Vector3(Math.cos(a) * between, ridge - 6, Math.sin(a) * between);
+  g.add(castle(castleAt, Math.PI / 2 - a)); // windows (−z) face the track
+  return { group: g, castleAt };
 }

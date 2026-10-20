@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Track } from 'shared/track';
 import { buildMountains } from './mountains';
+import { buildBraziers, buildCrows, buildLightning, buildMist } from './atmosphere';
 
 // Dark fantasy palette: a moonlit dusk, cold stone, and runes and crystals that glow (bloom picks them up).
 const HORIZON = 0x3a2846;
@@ -32,7 +33,8 @@ export function buildScene(track: Track) {
     domeCol.push(c.r, c.g, c.b);
   }
   domeGeo.setAttribute('color', new THREE.Float32BufferAttribute(domeCol, 3));
-  sky.add(new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
+  const dome = new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+  sky.add(dome);
   const moon = new THREE.Mesh(new THREE.IcosahedronGeometry(16, 1), new THREE.MeshBasicMaterial({ color: 0xe6e9ff, fog: false }));
   moon.position.copy(MOON_DIR).multiplyScalar(450);
   sky.add(moon);
@@ -45,12 +47,14 @@ export function buildScene(track: Track) {
   }
   const starGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(stars, 3));
   sky.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xcfd6ff, size: 1.6, sizeAttenuation: false, fog: false })));
-  sky.add(buildMountains(rand));
+  const mountains = buildMountains(rand);
+  sky.add(mountains.group);
   sky.renderOrder = -1;
   scene.add(sky);
 
   // --- Light: dim violet ambience and cold moonlight (it follows the player so shadows stay sharp) ---
-  scene.add(new THREE.HemisphereLight(0x6a5c9e, 0x1a1d14, 1.0));
+  const hemi = new THREE.HemisphereLight(0x6a5c9e, 0x1a1d14, 1.0);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xb4c2ff, 1.7);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -79,6 +83,7 @@ export function buildScene(track: Track) {
   mesh(track.trim, vcol(THREE.DoubleSide));
   mesh(track.ground, flat(0x34452b));
 
+  const runeGlow = glow(RUNE); // shared by every rune, so the blood moon can turn them all red at once
   const { samples, def } = track;
   const half = def.width / 2;
   const right = (s: { yaw: number }) => new THREE.Vector3(-Math.cos(s.yaw), 0, Math.sin(s.yaw));
@@ -86,7 +91,7 @@ export function buildScene(track: Track) {
 
   // Glowing runes set into the inside face of the outer wall.
   const runeSlots = samples.filter((_, i) => i % 6 === 3);
-  const runes = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.45, 0.9), glow(RUNE), runeSlots.length);
+  const runes = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.45, 0.9), runeGlow, runeSlots.length);
   runeSlots.forEach((s, i) => {
     const r = right(s).multiplyScalar(track.outer * (half - 0.05));
     q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, s.yaw);
@@ -115,7 +120,7 @@ export function buildScene(track: Track) {
   // Start: a glowing rune line across the road under a stone arch.
   const s0 = samples[0], r0 = right(s0);
   q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, s0.yaw);
-  const line = new THREE.Mesh(new THREE.BoxGeometry(def.width, 0.04, 0.8), glow(RUNE));
+  const line = new THREE.Mesh(new THREE.BoxGeometry(def.width, 0.04, 0.8), runeGlow);
   line.position.set(s0.x, s0.y + 0.03, s0.z);
   line.quaternion.copy(q);
   scene.add(line);
@@ -131,7 +136,7 @@ export function buildScene(track: Track) {
   lintel.position.set(s0.x, s0.y + 9.4, s0.z);
   lintel.quaternion.copy(q);
   lintel.castShadow = true;
-  const lintelRunes = new THREE.Mesh(new THREE.BoxGeometry(def.width - 1, 0.35, 1.84), glow(RUNE));
+  const lintelRunes = new THREE.Mesh(new THREE.BoxGeometry(def.width - 1, 0.35, 1.84), runeGlow);
   lintelRunes.position.copy(lintel.position);
   lintelRunes.quaternion.copy(q);
   scene.add(lintel, lintelRunes);
@@ -161,7 +166,7 @@ export function buildScene(track: Track) {
     dead: new THREE.InstancedMesh(deadTree, flat(0x2f2628), 90),
     rock: new THREE.InstancedMesh(rock, flat(0x45434d), 160),
     stone: new THREE.InstancedMesh(standing, flat(0x3b3843), 40),
-    stoneRune: new THREE.InstancedMesh(standingRune, glow(RUNE), 40),
+    stoneRune: new THREE.InstancedMesh(standingRune, runeGlow, 40),
     crystal: new THREE.InstancedMesh(crystal, glow(CRYSTAL), 120),
   };
   const count = Object.fromEntries(Object.keys(kinds).map(k => [k, 0])) as Record<keyof typeof kinds, number>;
@@ -224,8 +229,52 @@ export function buildScene(track: Track) {
   motes.frustumCulled = false;
   scene.add(motes);
 
-  /** Per frame: keep the sky centred on the camera and drift the motes around the player. */
+  // --- Atmosphere: braziers at corners, ground mist, crows, lightning behind the mountains ---
+  const braziers = buildBraziers(track);
+  scene.add(...braziers.objects);
+  const mist = buildMist();
+  scene.add(mist.object);
+  // A flock over the road on each half of the lap, out past the outer wall, and a few birds over the castle.
+  const flockAt = (f: number) => {
+    const s = samples[Math.floor(samples.length * f)], r = right(s).multiplyScalar(track.outer * (half + 30));
+    return new THREE.Vector3(s.x + r.x, 20, s.z + r.z);
+  };
+  const crows = buildCrows([0.3, 0.7].map(f => ({ centre: flockAt(f), radius: 12, count: 8, size: 0.6, speed: 0.5 })), true);
+  const castleCrows = buildCrows([{ centre: mountains.castleAt.clone().add(new THREE.Vector3(0, 55, 0)), radius: 22, count: 7, size: 4, speed: 0.25 }], false);
+  const lightning = buildLightning(hemi);
+  scene.add(crows.object);
+  sky.add(castleCrows.object, lightning.object);
+
+  // --- Blood moon: on the final lap the moon turns red and the sky, fog, moonlight and runes follow ---
+  const mountainMats: THREE.MeshBasicMaterial[] = [];
+  mountains.group.traverse(o => { if (o instanceof THREE.Mesh && (o.material as THREE.MeshBasicMaterial).vertexColors) mountainMats.push(o.material); });
+  const fog = scene.fog as THREE.Fog, background = scene.background as THREE.Color;
+  // [colour to drive, normal, blood]
+  const blood: [THREE.Color, THREE.Color, THREE.Color][] = [
+    [(moon.material as THREE.MeshBasicMaterial).color, new THREE.Color(0xe6e9ff), new THREE.Color(0xff2a1a).multiplyScalar(1.4)],
+    [background, new THREE.Color(ZENITH), new THREE.Color(0x1a0608)],
+    [fog.color, new THREE.Color(FOG), new THREE.Color(0x3a1418)],
+    [(dome.material as THREE.MeshBasicMaterial).color, new THREE.Color(1, 1, 1), new THREE.Color(1.9, 0.55, 0.5)], // tints the gradient
+    ...mountainMats.map(mat => [mat.color, new THREE.Color(1, 1, 1), new THREE.Color(1.5, 0.7, 0.65)] as [THREE.Color, THREE.Color, THREE.Color]),
+    [hemi.color, new THREE.Color(0x6a5c9e), new THREE.Color(0x80506e)], // only a little red: the ground stays readable
+    [sun.color, new THREE.Color(0xb4c2ff), new THREE.Color(0xff9080)],
+    [runeGlow.color, new THREE.Color(RUNE), new THREE.Color(0xff3b30)],
+  ];
+  let bloodTarget = 0, bloodLevel = 0;
+  /** Turn the blood moon on (final lap) or off; it fades over a few seconds. */
+  const setBloodMoon = (on: boolean) => { bloodTarget = on ? 1 : 0; };
+
+  /** Per frame: keep the sky centred on the camera, drift the motes and mist, and animate the atmosphere. */
   function update(camera: THREE.Camera, around: THREE.Vector3, dt: number, time: number) {
+    braziers.update(time);
+    mist.update(camera, around, dt);
+    crows.update(time);
+    castleCrows.update(time);
+    lightning.update(time);
+    if (bloodLevel !== bloodTarget) {
+      bloodLevel = bloodTarget > bloodLevel ? Math.min(bloodTarget, bloodLevel + dt / 3) : Math.max(bloodTarget, bloodLevel - dt / 3);
+      for (const [c, a, b] of blood) c.lerpColors(a, b, bloodLevel);
+    }
     sky.position.set(camera.position.x, 0, camera.position.z); // ground level, so a high camera (the menu) looks down on the mountains
     for (let i = 0; i < MOTES; i++) {
       const o = i * 3;
@@ -241,5 +290,5 @@ export function buildScene(track: Track) {
     moteGeo.attributes.position.needsUpdate = true;
   }
 
-  return { scene, sun, update };
+  return { scene, sun, update, setBloodMoon };
 }
