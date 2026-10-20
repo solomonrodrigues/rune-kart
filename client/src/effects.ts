@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SPELLS, type Effect } from 'shared/spells';
+import { MANA, SPELLS, type Effect } from 'shared/spells';
 
 const SMITE = SPELLS.find(s => s.id === 'smite')!.color;
 const SNARE = SPELLS.find(s => s.id === 'snare')!.color;
@@ -57,6 +57,43 @@ const snareGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.08, 6);
 const ringGeo = new THREE.TorusGeometry(1, 0.08, 4, 16).rotateX(Math.PI / 2);
 const flashGeo = new THREE.IcosahedronGeometry(0.8, 1);
 
+// --- Scorch marks: a smite leaves a rune scar burnt into the road — it glows, cools to embers, and fades ---
+const scorchTextures = (() => {
+  const make = (draw: (g: CanvasRenderingContext2D) => void) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    draw(c.getContext('2d')!);
+    return new THREE.CanvasTexture(c);
+  };
+  // The char: a dark, ragged-edged blot.
+  const char = make(g => {
+    const grad = g.createRadialGradient(64, 64, 6, 64, 64, 62);
+    grad.addColorStop(0, '#000f'); grad.addColorStop(0.55, '#000c'); grad.addColorStop(1, '#0000');
+    g.fillStyle = grad;
+    g.beginPath();
+    for (let i = 0; i <= 24; i++) { const a = (i / 24) * Math.PI * 2, r = 50 + ((i * 37) % 11); g.lineTo(64 + Math.cos(a) * r, 64 + Math.sin(a) * r); }
+    g.fill();
+  });
+  // The scar: a ring of rune marks and cracks radiating from the centre (white; the material tints it).
+  const runes = make(g => {
+    g.strokeStyle = '#fff'; g.lineCap = 'round';
+    g.lineWidth = 3; g.beginPath(); g.arc(64, 64, 38, 0, Math.PI * 2); g.stroke();
+    g.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+      g.beginPath(); g.moveTo(64 + c * 42, 64 + s * 42); g.lineTo(64 + c * 52, 64 + s * 52); // a tick outside the ring
+      if (i % 2) { g.moveTo(64 + c * 47 - s * 4, 64 + s * 47 + c * 4); g.lineTo(64 + c * 47 + s * 4, 64 + s * 47 - c * 4); } // crossed
+      g.stroke();
+      // A crack from the middle, jinking once.
+      const j = a + 0.25;
+      g.beginPath(); g.moveTo(64, 64); g.lineTo(64 + Math.cos(j) * 16, 64 + Math.sin(j) * 16); g.lineTo(64 + c * 34, 64 + s * 34); g.stroke();
+    }
+  });
+  return { char, runes };
+})();
+const scorchGeo = new THREE.PlaneGeometry(4.4, 4.4).rotateX(-Math.PI / 2); // big: seen from kart height it foreshortens a lot
+const SCORCH_LIFE = 7; // seconds: glow → embers → gone
+
 type Live = { kind: Effect['kind']; obj: THREE.Object3D; crackle?: THREE.LineSegments; mat?: THREE.Material };
 
 /** Draws spell effects (smites, snares) and one-off bursts. */
@@ -67,12 +104,23 @@ export class EffectsView {
   // One fixed light that follows the nearest smite (fixed count avoids shader recompiles; each extra
   // always-on light costs ~0.5 ms a frame across the whole screen).
   private lights = [new THREE.PointLight(SMITE, 0, 14, 1.5)];
+  // A small pool of scorch marks, reused oldest-first.
+  private scorches = Array.from({ length: 10 }, () => {
+    const charMat = new THREE.MeshBasicMaterial({ map: scorchTextures.char, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, opacity: 0 });
+    const runeMat = new THREE.MeshBasicMaterial({ map: scorchTextures.runes, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, color: 0 });
+    const group = new THREE.Group();
+    group.add(new THREE.Mesh(scorchGeo, charMat), new THREE.Mesh(scorchGeo, runeMat));
+    group.visible = false;
+    return { group, charMat, runeMat, age: SCORCH_LIFE };
+  });
+  private nextScorch = 0;
 
   /** Called with the position of every smite that lands or fizzles (for its sound). */
   onImpact: (at: THREE.Vector3) => void = () => {};
 
   constructor(private scene: THREE.Scene) {
     for (const l of this.lights) scene.add(l);
+    for (const s of this.scorches) scene.add(s.group);
   }
 
   /** A fresh copy of the replicated effects, stamped with when it arrived. */
@@ -93,6 +141,13 @@ export class EffectsView {
     this.scene.add(flash);
     this.bursts.push({ mesh: flash, age: 0, grow: 3 });
     this.burst(p.x, p.y - 0.5, p.z, SMITE);
+    // Burn a scar into the road under it (the bolt flies a fixed height over the ground).
+    const s = this.scorches[this.nextScorch];
+    this.nextScorch = (this.nextScorch + 1) % this.scorches.length;
+    s.group.position.set(p.x, p.y - MANA.smite.height + 0.04, p.z);
+    s.group.rotation.y = Math.random() * Math.PI * 2;
+    s.age = 0;
+    s.group.visible = true;
   }
 
   update(now: number, dt: number, camera: THREE.Vector3) {
@@ -137,6 +192,17 @@ export class EffectsView {
       l.intensity = s ? 18 : 0;
       if (s) l.position.copy(s.obj.position);
     });
+
+    for (const s of this.scorches) {
+      if (!s.group.visible) continue;
+      s.age += dt;
+      if (s.age >= SCORCH_LIFE) { s.group.visible = false; continue; }
+      const t = s.age;
+      // The runes flare, cool to a flickering ember glow, and die out; the char lingers then fades.
+      const glow = t < 0.15 ? t / 0.15 : Math.max(0, 1 - (t - 0.15) / 4) ** 1.5 * (0.85 + 0.15 * Math.sin(t * 9));
+      s.runeMat.color.setHex(SMITE).multiplyScalar(2.2 * glow);
+      s.charMat.opacity = 0.75 * Math.min(1, t / 0.1) * Math.min(1, (SCORCH_LIFE - t) / 2.5);
+    }
 
     this.bursts = this.bursts.filter(b => {
       b.age += dt;

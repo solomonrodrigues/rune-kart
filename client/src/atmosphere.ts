@@ -1,8 +1,9 @@
 // Atmosphere: iron braziers burning on the outside of corners, ground mist drifting around the player, crows
-// circling overhead and over the castle, and silent lightning behind the mountains. Each builder returns its
+// circling overhead and over the castle, silent lightning behind the mountains, and ghost wisps crossing the road. Each builder returns its
 // object(s) and a per-frame update; all instanced, lit by bloom rather than real lights, so they stay cheap.
 import * as THREE from 'three';
 import type { Track } from 'shared/track';
+import { Trail } from './arcane';
 
 const hdr = (hex: number, k: number) => new THREE.Color(hex).multiplyScalar(k);
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -178,6 +179,58 @@ export function buildLightning(hemi: THREE.HemisphereLight) {
       glow.visible = f > 0;
       mat.color.copy(colour).multiplyScalar(f * 1.4);
       hemi.intensity = baseHemi * (1 + 0.5 * f); // the whole world lifts slightly in the flash
+    },
+  };
+}
+
+// --- Ghost wisps: now and then a pale spirit drifts across the road ahead of you, trailing a ribbon ---
+export function buildGhosts() {
+  const SLOTS = 3, colour = new THREE.Color(0xbfe8ff).multiplyScalar(1.3);
+  const tex = softTexture(64, 64), fwd = new THREE.Vector3(), side = new THREE.Vector3(), at = new THREE.Vector3(), still = new THREE.Vector3();
+  const ghosts = Array.from({ length: SLOTS }, () => {
+    const head = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: colour.clone(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    head.scale.setScalar(1.1);
+    head.visible = false;
+    const tail = new Trail(1.4, 0.3);
+    return { head, tail, start: new THREE.Vector3(), end: new THREE.Vector3(), age: 0, life: 0, live: false, phase: 0 };
+  });
+  let next = 4 + Math.random() * 6;
+  return {
+    objects: ghosts.flatMap(g => [g.head, g.tail.mesh]),
+    update(camera: THREE.Camera, around: THREE.Vector3, dt: number, time: number) {
+      // Spawn one every 7–15 s, 30–45 m ahead of where the camera looks, crossing from one side to the other.
+      if (time > next) {
+        next = time + 7 + Math.random() * 8;
+        const g = ghosts.find(o => !o.live);
+        if (g) {
+          camera.getWorldDirection(fwd).setY(0).normalize();
+          side.set(fwd.z, 0, -fwd.x);
+          const ahead = 30 + Math.random() * 15, dir = Math.random() < 0.5 ? 1 : -1, y = around.y + 1.5 + Math.random() * 1.5;
+          g.start.copy(around).addScaledVector(fwd, ahead).addScaledVector(side, -dir * 20).setY(y);
+          g.end.copy(around).addScaledVector(fwd, ahead + 8).addScaledVector(side, dir * 20).setY(y + 1);
+          Object.assign(g, { age: 0, life: 5 + Math.random() * 2, live: true, phase: Math.random() * 6 });
+        }
+      }
+      for (const g of ghosts) {
+        if (g.live) {
+          g.age += dt;
+          const t = g.age / g.life;
+          if (t >= 1) { g.live = false; g.head.visible = false; }
+          else {
+            // Drifting across in a lazy S, bobbing, fading in and out.
+            at.lerpVectors(g.start, g.end, t);
+            at.x += Math.sin(t * Math.PI * 2 + g.phase) * 2; at.z += Math.cos(t * Math.PI * 2 + g.phase) * 2;
+            at.y += Math.sin(time * 2.2 + g.phase) * 0.4;
+            const fade = Math.min(1, t * 5, (1 - t) * 4);
+            g.head.position.copy(at);
+            g.head.visible = true;
+            g.head.material.color.copy(colour).multiplyScalar(fade);
+            g.tail.colour.copy(colour).multiplyScalar(fade * 0.8);
+            g.tail.push(at, still);
+          }
+        }
+        g.tail.update(dt); // the tail keeps fading out after the ghost has gone
+      }
     },
   };
 }

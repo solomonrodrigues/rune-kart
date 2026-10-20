@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Track } from 'shared/track';
 import { buildMountains } from './mountains';
-import { buildBraziers, buildCrows, buildLightning, buildMist } from './atmosphere';
+import { buildBraziers, buildCrows, buildGhosts, buildLightning, buildMist } from './atmosphere';
 import { buildDressing } from './dressing';
 import { buildLandmarks } from './landmarks';
 
@@ -253,6 +253,8 @@ export function buildScene(track: Track) {
   const crows = buildCrows([0.3, 0.7].map(f => ({ centre: flockAt(f), radius: 12, count: 8, size: 0.6, speed: 0.5 })), true);
   const castleCrows = buildCrows([{ centre: mountains.castleAt.clone().add(new THREE.Vector3(0, 55, 0)), radius: 22, count: 7, size: 4, speed: 0.25 }], false);
   const lightning = buildLightning(hemi);
+  const ghosts = buildGhosts();
+  scene.add(...ghosts.objects);
   scene.add(crows.object);
   sky.add(castleCrows.object, lightning.object);
 
@@ -283,6 +285,7 @@ export function buildScene(track: Track) {
     crows.update(time);
     castleCrows.update(time);
     lightning.update(time);
+    ghosts.update(camera, around, dt, time);
     if (bloodLevel !== bloodTarget) {
       bloodLevel = bloodTarget > bloodLevel ? Math.min(bloodTarget, bloodLevel + dt / 3) : Math.max(bloodTarget, bloodLevel - dt / 3);
       for (const [c, a, b] of blood) c.lerpColors(a, b, bloodLevel);
