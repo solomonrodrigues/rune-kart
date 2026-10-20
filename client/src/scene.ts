@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Track } from 'shared/track';
+import { buildMountains } from './mountains';
 
 // Dark fantasy palette: a moonlit dusk, cold stone, and runes and crystals that glow (bloom picks them up).
 const HORIZON = 0x3a2846;
@@ -44,6 +45,7 @@ export function buildScene(track: Track) {
   }
   const starGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(stars, 3));
   sky.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xcfd6ff, size: 1.6, sizeAttenuation: false, fog: false })));
+  sky.add(buildMountains(rand));
   sky.renderOrder = -1;
   scene.add(sky);
 
