@@ -63,7 +63,7 @@ export class KartModel {
   private fwd = new THREE.Vector3();
   private left = new THREE.Vector3();
 
-  update(k: KartState, steer: number, dt: number, time: number) {
+  update(k: KartState, dt: number, time: number) {
     this.root.position.set(k.x, k.y, k.z);
     // Orient to the ground normal, keeping the heading.
     this.up.set(k.nx, k.ny, k.nz).normalize();
@@ -78,7 +78,7 @@ export class KartModel {
     const speed = k.vx * Math.sin(k.yaw) + k.vz * Math.cos(k.yaw);
     this.wheelSpin += (speed / 0.32) * dt;
     for (const w of this.wheels) w.rotation.x = this.wheelSpin;
-    for (const w of this.frontWheels) w.rotation.y = -steer * 0.4;
+    for (const w of this.frontWheels) w.rotation.y = -k.steer * 0.4;
 
     const tier = driftTier(k);
     for (const s of this.sparks) {

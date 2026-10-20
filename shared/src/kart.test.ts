@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { stepKart, clampInput, newKart, driftTier, kartSpeed, KART, type KartInput, type KartState } from './kart.ts';
-import { createTrack, spawnPoint } from './track.ts';
+import { createTrack, spawnPoint, GROUND_Y } from './track.ts';
 import { GREYBOX } from './tracks.ts';
 import { autopilot as followTrack } from './race.ts';
 
@@ -60,6 +60,55 @@ const distToCentreline = (x: number, z: number) => Math.min(...track.samples.map
   const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz)));
   return Math.hypot(x - a.x - dx * t, z - a.z - dz * t);
 }));
+
+// Start a drift at racing speed on open ground (offroad slowdown off) and hold it with a given steer.
+function heldDrift(steer: number, ticks: number) {
+  const saved = { ...KART };
+  Object.assign(KART, { offroadMax: KART.maxSpeed, offroadDrag: 0 });
+  const k = newKart({ x: 300, y: GROUND_Y, z: 300, yaw: 0 });
+  drive(5, () => ({ steer: 0, throttle: 0, drift: false }), k);
+  k.vz = 28;
+  drive(1, () => ({ steer: 1, throttle: 1, drift: true }), k);
+  let maxSlip = 0;
+  for (let t = 0; t < ticks; t++) {
+    stepKart(k, { steer, throttle: 1, drift: true }, track);
+    const slip = Math.abs(Math.atan2(Math.sin(Math.atan2(k.vx, k.vz) - k.yaw), Math.cos(Math.atan2(k.vx, k.vz) - k.yaw)));
+    maxSlip = Math.max(maxSlip, slip);
+  }
+  Object.assign(KART, saved);
+  return { k, maxSlip: maxSlip * 180 / Math.PI };
+}
+
+test('a held drift follows the nose and keeps its speed', () => {
+  // Regression: low drift grip let the kart slide 30–40° wide and bleed half its speed, flinging it off the road.
+  for (const steer of [-1, 0, 1]) {
+    const { k, maxSlip } = heldDrift(steer, 90);
+    assert.equal(k.driftDir, 1, 'drift should still be held');
+    assert.ok(maxSlip < 20, `steer ${steer}: slipped ${maxSlip.toFixed(0)}°`);
+    assert.ok(kartSpeed(k) > 28 * 0.8, `steer ${steer}: slowed to ${kartSpeed(k).toFixed(1)}`);
+  }
+});
+
+test('a drift through a typical corner earns a boost', () => {
+  const { k } = heldDrift(0.5, 42); // ~0.7 s
+  assert.ok(driftTier(k) >= 1, `charge ${k.driftCharge.toFixed(2)}`);
+});
+
+test('releasing a drift points the kart and its boost along the direction of travel', () => {
+  // Regression: the boost fired along the over-rotated nose, shoving karts off the inside of the corner.
+  const { k } = heldDrift(1, 42);
+  drive(1, () => ({ steer: 1, throttle: 1, drift: false }), k);
+  assert.ok(k.boostTime > 0, 'should boost');
+  const travel = Math.atan2(k.vx, k.vz);
+  const off = Math.abs(Math.atan2(Math.sin(travel - k.yaw), Math.cos(travel - k.yaw))) * 180 / Math.PI;
+  assert.ok(off < 3, `nose is ${off.toFixed(1)}° off the direction of travel`);
+});
+
+test('steering out of a drift nearly straightens it', () => {
+  const start = heldDrift(-1, 0).k.yaw;
+  const { k } = heldDrift(-1, 60);
+  assert.ok(Math.abs(k.yaw - start) < 0.4, `still turned ${(k.yaw - start).toFixed(2)} rad in 1 s`);
+});
 
 test('karts cannot drive through the outer wall', () => {
   // Fire a kart sideways at both edges all round the loop: it either leaves via the open infield

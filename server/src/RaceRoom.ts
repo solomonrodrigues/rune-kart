@@ -19,6 +19,7 @@ export class Kart extends Schema implements KartState {
   @type('number') driftCharge = 0;
   @type('number') driftHeld = 0;
   @type('number') boostTime = 0;
+  @type('number') steer = 0;
   @type('number') color = 0xffffff;
   @type('number') ack = 0; // last input seq applied — the owning client replays everything after it
   // Race standing. `racing` is false for anyone who joined after the start; they free-drive until the next race.

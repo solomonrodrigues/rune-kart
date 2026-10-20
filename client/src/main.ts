@@ -190,10 +190,10 @@ renderer.setAnimationLoop(now => {
   correction.x *= decay; correction.y *= decay; correction.z *= decay; correction.yaw *= decay;
   const k = lerpKart(localView, localPrev, local, acc / DT);
   k.x += correction.x; k.y += correction.y; k.z += correction.z; k.yaw += correction.yaw;
-  localModel.update(k, input.steer, dt, now / 1000);
+  localModel.update(k, dt, now / 1000);
 
   const renderT = now - INTERP_DELAY;
-  for (const r of remotes.values()) r.model.update(sampleRemote(r, renderT), 0, dt, now / 1000);
+  for (const r of remotes.values()) r.model.update(sampleRemote(r, renderT), dt, now / 1000);
 
   const speed = kartSpeed(k);
   // Lag the camera's heading behind the kart's, more so mid-drift so the slide reads.

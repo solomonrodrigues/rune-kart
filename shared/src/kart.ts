@@ -20,6 +20,7 @@ export interface KartState {
   driftCharge: number;
   driftHeld: number;  // last tick's drift button, for edge detection
   boostTime: number;
+  steer: number;      // smoothed steering actually applied (input eases in, so keyboards aren't twitchy)
 }
 
 // Tuning lives in one mutable object so it can be tweaked live from the console (window.KART).
@@ -28,9 +29,11 @@ export const KART = {
   drag: 0.1, coastDrag: 0.8,
   offroadMax: 14, offroadDrag: 1.5,
   turnRate: 2.4, turnSpeedFull: 8, // speed at which steering reaches full authority
-  grip: 12, driftGrip: 2.2,
-  driftMinSpeed: 10, driftBase: 1.15, driftRange: 0.55,
-  driftTiers: [1.0, 2.0, 3.0], boostTimes: [0.6, 1.1, 1.8],
+  steerRate: 7, // how fast steering eases towards the input, per second (full lock in ~0.15 s)
+  grip: 12, driftGrip: 8, // drift grip keeps the path following the nose; the slide is mostly visual
+  // Drift yaw rate (rad/s): neutral matches a typical corner, steering in tightens, steering out nearly straightens.
+  driftMinSpeed: 10, driftBase: 0.8, driftTighten: 0.6, driftWiden: 0.55,
+  driftTiers: [0.6, 1.2, 2.0], boostTimes: [0.6, 1.1, 1.8], // seconds of charge per spark tier
   boostMax: 40, boostAccel: 45,
   gravity: 30, airSteer: 0.35,
   radius: 0.7, probe: 1.5, snap: 0.45,
@@ -44,7 +47,7 @@ export function newKart(at: { x: number; y: number; z: number; yaw: number }): K
   return {
     x: at.x, y: at.y, z: at.z, vx: 0, vy: 0, vz: 0, yaw: at.yaw,
     nx: 0, ny: 1, nz: 0, grounded: 0, offroad: 0,
-    driftDir: 0, driftCharge: 0, driftHeld: 0, boostTime: 0,
+    driftDir: 0, driftCharge: 0, driftHeld: 0, boostTime: 0, steer: 0,
   };
 }
 
@@ -93,9 +96,12 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
   }
 
   // Heading projected onto the ground plane.
-  fwd.set(Math.sin(k.yaw), 0, Math.cos(k.yaw));
-  fwd.addScaledVector(n, -fwd.dot(n)).normalize();
-  lat.crossVectors(fwd, n).normalize(); // points right
+  const basis = () => {
+    fwd.set(Math.sin(k.yaw), 0, Math.cos(k.yaw));
+    fwd.addScaledVector(n, -fwd.dot(n)).normalize();
+    lat.crossVectors(fwd, n).normalize(); // points right
+  };
+  basis();
   let vF = vel.dot(fwd), vL = vel.dot(lat);
   const vN = grounded ? 0 : vel.dot(n);
 
@@ -109,18 +115,26 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
     if (tier && input.drift === false) k.boostTime = Math.max(k.boostTime, K.boostTimes[tier - 1]);
     k.driftDir = 0;
     k.driftCharge = 0;
+    // Mid-drift the nose points into the corner; on release face where the kart is actually going,
+    // so the boost carries it along its path instead of into the inside of the corner.
+    if (grounded && Math.hypot(vel.x, vel.z) > 1) {
+      k.yaw = Math.atan2(vel.x, vel.z);
+      basis();
+      vF = vel.dot(fwd); vL = vel.dot(lat);
+    }
   }
-  if (k.driftDir && grounded) k.driftCharge += dt * (0.6 + 0.6 * Math.max(0, input.steer * k.driftDir));
+  if (k.driftDir && grounded) k.driftCharge += dt * (0.8 + 0.5 * Math.max(0, k.steer * k.driftDir));
   k.driftHeld = input.drift ? 1 : 0;
 
   // --- Steering ---
+  k.steer += Math.max(-K.steerRate * dt, Math.min(K.steerRate * dt, input.steer - k.steer));
   const authority = Math.min(1, Math.abs(vF) / K.turnSpeedFull) * Math.sign(vF || 1);
   let yawRate: number;
   if (k.driftDir) {
-    // Steering into the drift tightens it, steering out widens it, but it always turns.
-    yawRate = k.driftDir * (K.driftBase + K.driftRange * input.steer * k.driftDir);
+    const into = k.steer * k.driftDir; // +1 steering into the drift, -1 steering out
+    yawRate = k.driftDir * (K.driftBase + into * (into > 0 ? K.driftTighten : K.driftWiden));
   } else {
-    yawRate = input.steer * K.turnRate * authority * (1 - 0.25 * Math.min(1, Math.abs(vF) / K.maxSpeed));
+    yawRate = k.steer * K.turnRate * authority * (1 - 0.25 * Math.min(1, Math.abs(vF) / K.maxSpeed));
   }
   k.yaw -= yawRate * dt * (grounded ? 1 : K.airSteer);
 
