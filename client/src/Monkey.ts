@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeStatic } from './mergeStatic';
 
 // Low-poly monkey driver: shaggy dark fur, a big peach muzzle, wide eyes and a thin smile.
 // Built from primitives in local space: +z is where he faces, y = 0 is the seat.
@@ -175,6 +176,11 @@ export class Monkey {
         this.root.add(arm);
       }
     }
+
+    // Dozens of primitives → a few draw calls per part (head and wheel stay separate so they can move).
+    mergeStatic(this.head);
+    mergeStatic(this.wheel);
+    mergeStatic(this.root);
   }
 
   /** Turn the wheel with the steering and lean the head into corners. */

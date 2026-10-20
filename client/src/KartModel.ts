@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { driftTier, KART, type KartState } from 'shared/kart';
 import { SPELLS } from 'shared/spells';
 import { Monkey } from './Monkey';
+import { mergeStatic } from './mergeStatic';
 
 const flat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 // Over-bright (HDR) colours: anything past the bloom threshold glows, so every spark tier, the boost
@@ -135,6 +136,8 @@ export class KartModel {
     this.ward.visible = false;
 
     this.root.add(this.body, this.ward);
+    // ~40 primitives → a handful of draw calls; the animated parts stay separate.
+    mergeStatic(this.body, [...this.wheels, ...this.sparks, this.flame]);
   }
 
   private basis = new THREE.Matrix4();
