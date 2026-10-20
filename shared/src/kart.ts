@@ -20,7 +20,7 @@ export interface KartState {
   offroad: number;    // 0 | 1
   driftDir: number;   // -1 | 0 | 1
   driftCharge: number;
-  driftHeld: number;  // last tick's drift button, for edge detection
+  driftHeld: number;  // drift button: 0 up, 1 held and armed (no drift yet from this press), 2 held and used
   boostTime: number;
   boostTier: number;  // drift tier (1–3) behind the current boost, 0 for Haste — colours the flame
   steer: number;      // smoothed steering actually applied (input eases in, so keyboards aren't twitchy)
@@ -136,9 +136,14 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
   const vN = grounded ? 0 : vel.dot(n);
 
   // --- Drift state ---
-  if (input.drift && !k.driftHeld && grounded && Math.abs(input.steer) > 0.1 && vF > K.driftMinSpeed) {
+  // A press arms the drift until it's let go, so it starts whichever comes first — the button or the steering —
+  // as soon as the kart is steering, grounded and quick enough. One press, one drift: a drift that ends while
+  // the button's still down doesn't restart until it's pressed again.
+  let started = false;
+  if (input.drift && k.driftHeld !== 2 && !k.driftDir && grounded && Math.abs(input.steer) > 0.1 && vF > K.driftMinSpeed) {
     k.driftDir = Math.sign(input.steer);
     k.driftCharge = 0;
+    started = true;
   }
   if (k.driftDir && (!input.drift || vF < K.driftMinSpeed * 0.5)) {
     const tier = driftTier(k);
@@ -157,7 +162,7 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
     }
   }
   if (k.driftDir && grounded) k.driftCharge += dt * (0.8 + 0.5 * Math.max(0, k.steer * k.driftDir));
-  k.driftHeld = input.drift ? 1 : 0;
+  k.driftHeld = !input.drift ? 0 : started || k.driftHeld === 2 ? 2 : 1;
 
   // --- Steering ---
   k.steer += Math.max(-K.steerRate * dt, Math.min(K.steerRate * dt, input.steer - k.steer));

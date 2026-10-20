@@ -213,3 +213,35 @@ test('a boost helps on the grass, but never beats driving on the road', () => {
   assert.ok(top > KART.offroadMax + 4, `boost on grass reached ${top.toFixed(1)} m/s`);
   assert.ok(top < KART.maxSpeed - 4, `but stays well under road speed (${top.toFixed(1)} m/s)`);
 });
+
+// --- Starting a drift: the button and the steering in either order ---
+const atSpeed = () => drive(90, () => gas); // ~1.5 s down the start straight
+const hold = (steer: number): KartInput => ({ steer, throttle: 1, drift: true });
+
+test('pressing drift before steering still starts a drift once you steer', () => {
+  const k = atSpeed();
+  drive(12, () => hold(0), k); // button down first, going straight: no drift yet
+  assert.equal(k.driftDir, 0);
+  drive(2, () => hold(0.8), k); // then steer, still holding
+  assert.equal(k.driftDir, 1);
+});
+
+test('steering before pressing drift starts a drift too', () => {
+  const k = atSpeed();
+  drive(6, () => ({ steer: -0.8, throttle: 1, drift: false }), k);
+  drive(1, () => hold(-0.8), k);
+  assert.equal(k.driftDir, -1);
+});
+
+test('one press, one drift: a drift that ends with the button still down does not restart', () => {
+  const k = atSpeed();
+  drive(2, () => hold(0.8), k);
+  assert.equal(k.driftDir, 1);
+  drive(120, () => ({ steer: 0.8, throttle: -1, drift: true }), k); // brake right down: the drift ends
+  assert.equal(k.driftDir, 0, 'drift ended when it slowed');
+  drive(90, () => hold(0.8), k); // speed back up, button still held, still steering
+  assert.equal(k.driftDir, 0, 'no new drift without a new press');
+  drive(1, () => ({ steer: 0.8, throttle: 1, drift: false }), k);
+  drive(1, () => hold(0.8), k); // let go and press again
+  assert.equal(k.driftDir, 1);
+});
