@@ -112,7 +112,7 @@ export function createTrack(def: TrackDef): Track {
 /** Grid slot `slot` behind the start line: two columns, staggered rows. */
 export function spawnPoint(track: Track, slot: number): TrackSample {
   const { samples, def } = track;
-  const s = samples[(samples.length - 2 - Math.floor(slot / 2) * 2) % samples.length];
+  const s = samples[(samples.length - 2 - Math.floor(slot / 2) * 4) % samples.length]; // rows ~10 m apart: clear of the chase camera
   const side = (slot % 2 ? 1 : -1) * def.width * 0.22;
   return { x: s.x + Math.cos(s.yaw) * -side, y: s.y, z: s.z + Math.sin(s.yaw) * side, yaw: s.yaw };
 }
