@@ -8,6 +8,7 @@ import { autopilot } from 'shared/race';
 import { GREYBOX } from 'shared/tracks';
 import { KartModel } from './KartModel';
 import { EffectsView } from './effects';
+import { Minimap, type MapKart } from './minimap';
 import { fxCamera } from './arcane';
 import { deniedCast, renderSpells, setManaColour } from './spellUi';
 import { MANA, NO_CAST, SPELLS, spawnEffect, stepEffects, type Effect } from 'shared/spells';
@@ -35,6 +36,7 @@ document.body.appendChild(renderer.domElement);
 const track = createTrack(GREYBOX);
 const { scene, sun, update: updateScene } = buildScene(track);
 const effects = new EffectsView(scene);
+const minimap = new Minimap(track);
 const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 600);
 // Bloom makes the bright, unlit things (runes, crystals, spells, the moon) glow against the dark.
 // Half-float target so over-bright colours survive into the bloom. No MSAA on it: measured at 2400×1500,
@@ -91,7 +93,7 @@ function lerpKart(out: KartState, a: KartState, b: KartState, t: number): KartSt
 // so patch jitter never shows. If snapshots stop arriving, extrapolate briefly on velocity.
 const INTERP_DELAY = 100;
 const MAX_EXTRAPOLATE = 0.1;
-interface Remote { snaps: { t: number; s: KartState }[]; model: KartModel }
+interface Remote { snaps: { t: number; s: KartState }[]; model: KartModel; color: number }
 const remotes = new Map<string, Remote>();
 
 function sampleRemote(r: Remote, t: number): KartState {
@@ -181,7 +183,7 @@ if (!OFFLINE) {
         if (id === room.sessionId) { onServerState(s, ack); continue; }
         let r = remotes.get(id);
         if (!r) {
-          r = { snaps: [], model: new KartModel(color) };
+          r = { snaps: [], model: new KartModel(color), color };
           scene.add(r.model.root, r.model.fx);
           remotes.set(id, r);
         }
@@ -278,7 +280,13 @@ renderer.setAnimationLoop(now => {
   renderSpells(local);
 
   const renderT = now - INTERP_DELAY;
-  for (const r of remotes.values()) r.model.update(sampleRemote(r, renderT), dt, now / 1000);
+  const mapKarts: MapKart[] = [{ x: k.x, z: k.z, yaw: k.yaw, color: myColor, me: true }];
+  for (const r of remotes.values()) {
+    const s = sampleRemote(r, renderT);
+    mapKarts.push({ x: s.x, z: s.z, yaw: s.yaw, color: r.color, me: false });
+    r.model.update(s, dt, now / 1000);
+  }
+  minimap.draw(mapKarts);
 
   const speed = kartSpeed(k);
   // Lag the camera's heading behind the kart's, more so mid-drift so the slide reads.

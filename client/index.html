@@ -74,6 +74,28 @@
       #spells .spell.poor .cost { background: radial-gradient(circle at 40% 35%, #ff9a9a, #9c1f1f 60%, #3a0808); }
       #spells .spell.denied .slot { animation: slot-denied .35s; }
       @keyframes slot-denied { 0%, 60% { box-shadow: inset 0 4px 9px #000, 0 0 0 2px #2a2830, 0 0 0 3px #ff4040, 0 0 14px #ff4040aa; } }
+      /* Minimap: a dark stone tablet in an iron frame, top right. */
+      #minimap { position: fixed; top: 12px; right: 12px; width: 168px; height: 168px; border-radius: 8px; pointer-events: none;
+        background: radial-gradient(circle at 50% 40%, #241e2acc, #0e0b12e6);
+        box-shadow: inset 0 0 14px #000, 0 0 0 2px #121117, 0 0 0 4px var(--iron), 0 0 0 5px #0b0a0e, 0 6px 16px #000a; }
+      /* Placing, bottom right: big metal numerals — gold, silver, bronze, then iron. */
+      #place { position: fixed; right: 20px; bottom: 8px; font: 700 76px/1 var(--serif); pointer-events: none; filter: drop-shadow(0 3px 0 #000a) drop-shadow(0 0 12px #000); }
+      #place small { font-size: 30px; margin-left: 2px; }
+      #place, #place small { background-clip: text; -webkit-background-clip: text; color: transparent; }
+      #place.p1, #place.p1 small { background-image: linear-gradient(#fff4c4, #e8b64c 55%, #8a5a1a); }
+      #place.p2, #place.p2 small { background-image: linear-gradient(#ffffff, #b9bec9 55%, #5d6270); }
+      #place.p3, #place.p3 small { background-image: linear-gradient(#ffd8b0, #c27a3e 55%, #6b3a14); }
+      #place.p4, #place.p4 small { background-image: linear-gradient(#d6d6de, #74757e 55%, #34353b); }
+      #place.pop { animation: place-pop .35s ease-out; }
+      @keyframes place-pop { 0% { transform: scale(1.4); } 100% { transform: scale(1); } }
+      /* Lap banner: sweeps in, holds, sweeps out. Final lap burns orange. */
+      #lapflash { position: fixed; top: 32%; left: 0; right: 0; text-align: center; font: 700 64px var(--serif); font-variant: small-caps; letter-spacing: .04em;
+        color: #f3e3b3; text-shadow: 0 0 24px #a77bff, 0 4px 10px #000; opacity: 0; pointer-events: none; }
+      #lapflash small { font-size: 34px; color: #d8c9a3; }
+      #lapflash.show { animation: lap-sweep 2.2s ease forwards; }
+      #lapflash.final { color: #ffcf7a; font-size: 76px; text-shadow: 0 0 24px #ff7a2a, 0 0 48px #ff3d1a88, 0 4px 10px #000; }
+      @keyframes lap-sweep { 0% { transform: translateX(60vw); opacity: 0; } 15%, 75% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(-60vw); opacity: 0; } }
+      @media (max-width: 560px) { #minimap { width: 112px; height: 112px; } #place { font-size: 52px; } #place small { font-size: 22px; } #lapflash { font-size: 40px; } #lapflash.final { font-size: 46px; } }
       @media (max-width: 560px) { #spells { gap: 8px; } #spells .orb { width: 76px; height: 76px; } #spells .bar { gap: 6px; padding-right: 10px; } #spells .spell { width: 46px; } #spells .slot { width: 42px; height: 50px; } #spells .slot svg { width: 22px; height: 22px; margin-top: 12px; } #spells .spell .cost { top: 39px; } #spells .spell b { font-size: 10px; } }
     </style>
   </head>
@@ -81,6 +103,9 @@
     <div id="hud" role="status">Connecting…</div>
     <div id="banner" aria-live="polite"></div>
     <div id="spells"></div>
+    <canvas id="minimap" aria-label="Track map"></canvas>
+    <div id="place" aria-live="polite"></div>
+    <div id="lapflash" aria-live="polite"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

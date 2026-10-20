@@ -1,4 +1,5 @@
-// Race overlay: the big centre banner (lobby prompt, countdown, results) and the lap/place HUD line.
+// Race overlay: the big centre banner (lobby prompt, countdown, results), the lap/time HUD line,
+// the big placing in the corner, and the Mario Kart-style lap banner.
 export interface Standing { id: string; color: number; place: number; finishTime: number; lap: number; racing: boolean; ready: boolean; bot: boolean }
 export interface RaceView { phase: 'lobby' | 'countdown' | 'racing' | 'results'; timer: number; laps: number; at: number; standings: Standing[] }
 
@@ -10,6 +11,34 @@ export const formatTime = (s: number) =>
 let lastHtml = '';
 const show = (html: string) => { if (html !== lastHtml) el.innerHTML = lastHtml = html; };
 
+/** 1 → "1st", 2 → "2nd", 11 → "11th", 23 → "23rd". */
+export const ordinal = (n: number) => {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  return `${n}${teen ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;
+};
+
+// Big placing, bottom right: gold / silver / bronze / iron, popping when it changes.
+const placeEl = document.getElementById('place')!;
+let shownPlace = '';
+function showPlace(place: number) {
+  const text = place ? ordinal(place) : '';
+  if (text === shownPlace) return;
+  shownPlace = text;
+  placeEl.className = place ? `p${Math.min(place, 4)}` : '';
+  placeEl.innerHTML = place ? `${place}<small>${text.slice(String(place).length)}</small>` : '';
+  if (place) { placeEl.classList.remove('pop'); void placeEl.offsetWidth; placeEl.classList.add('pop'); }
+}
+
+// Lap banner: sweeps across when you start a new lap; the last one is "Final Lap!".
+const lapEl = document.getElementById('lapflash')!;
+let lastLap = 0;
+function flashLap(lap: number, laps: number) {
+  lapEl.className = '';
+  lapEl.innerHTML = lap === laps ? 'Final Lap!' : `Lap ${lap} <small>/ ${laps}</small>`;
+  void lapEl.offsetWidth; // restart the animation
+  lapEl.className = lap === laps ? 'show final' : 'show';
+}
+
 /** Updates the banner and returns the HUD line for the local racer. */
 export function renderRace(v: RaceView | null, myId: string, now: number, joinHint = ''): string {
   if (!v) { show(''); return ''; }
@@ -17,6 +46,11 @@ export function renderRace(v: RaceView | null, myId: string, now: number, joinHi
   const timer = v.phase === 'racing' ? v.timer + elapsed : Math.max(0, v.timer - elapsed);
   const me = v.standings.find(s => s.id === myId);
   const racers = v.standings.filter(s => s.racing);
+  // Placing shows while you're racing (and on the results); the lap banner fires when your lap goes up.
+  const racing = v.phase === 'racing' && !!me?.racing;
+  showPlace(racing || (v.phase === 'results' && me?.racing) ? me!.place : 0);
+  if (racing && me!.finishTime < 0 && lastLap && me!.lap > lastLap) flashLap(me!.lap, v.laps);
+  lastLap = racing ? me!.lap : 0;
 
   switch (v.phase) {
     case 'lobby': {
@@ -36,7 +70,7 @@ export function renderRace(v: RaceView | null, myId: string, now: number, joinHi
       else if (me.finishTime >= 0) show(`<p>Finished P${me.place}</p><small>${formatTime(me.finishTime)}</small>`);
       else show(timer < 1 ? '<b class="big">GO!</b>' : '');
       return me?.racing
-        ? `Lap ${me.lap}/${v.laps} · P${me.place}/${racers.length} · ${formatTime(me.finishTime >= 0 ? me.finishTime : timer)}`
+        ? `Lap ${me.lap}/${v.laps} · ${formatTime(me.finishTime >= 0 ? me.finishTime : timer)}` // placing has its own display
         : '';
     case 'results':
       show('<p>Results</p><table>' +
