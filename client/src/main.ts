@@ -3,7 +3,7 @@ import { Client, type Room } from 'colyseus.js';
 import { PORT, ROOM_NAME } from 'shared/constants';
 import { DT, KART, copyKart, driftTier, kartSpeed, newKart, type KartInput, type KartState } from 'shared/kart';
 import { Predictor, type SeqInput } from 'shared/prediction';
-import { createTrack, spawnPoint } from 'shared/track';
+import { createTrack, nearestSample, spawnPoint } from 'shared/track';
 import { autopilot } from 'shared/race';
 import { TRACKS, trackDef } from 'shared/tracks';
 import { loadName, runMenu } from './menu';
@@ -281,6 +281,8 @@ let finishCam = 0; // 0 normal chase cam → 1 swung round to the front after yo
 const camPos = new THREE.Vector3(), lookAt = new THREE.Vector3(), focus = new THREE.Vector3();
 
 let lastTier = 0, lastBoost = 0, lastStun = 0, lastRescue = 0, lastHeld = 0;
+const wrongWay = document.getElementById('wrongway')!;
+let wrongWayFor = 0; // seconds spent going against the track
 effects.onImpact = p => sound.impact(p.distanceTo(camera.position));
 
 // Race sounds: countdown beeps and GO, a chime each lap (a flourish for the last), a fanfare at the finish.
@@ -354,6 +356,13 @@ renderer.setAnimationLoop(now => {
   if (local.driftHeld && !lastHeld && local.grounded) sound.hop(); // the drift hop (KartModel draws it)
   lastTier = tierNow; lastBoost = local.boostTime; lastStun = local.stunTime; lastRescue = local.rescue; lastHeld = local.driftHeld;
   sound.drive(kartSpeed(local), input.throttle, local.boostTime > 0, !!local.driftDir);
+  // Wrong way: moving against the track for a moment — judged by where you're going, not where the nose
+  // points, so a spin or a drift doesn't set it off. It fades once you're heading the right way again.
+  const along = nearestSample(track, local.x, local.z, local.y);
+  const against = Math.hypot(local.vx, local.vz) > 4 && Math.cos(Math.atan2(local.vx, local.vz) - along.yaw) < -0.35;
+  const racingNow = !finished && local.rescue <= 0 && (!race || race.phase === 'racing');
+  wrongWayFor = against && racingNow ? wrongWayFor + dt : 0;
+  wrongWay.classList.toggle('on', wrongWayFor > 0.8);
   raceSounds(now);
 
   const decay = Math.exp(-dt / 0.1);
