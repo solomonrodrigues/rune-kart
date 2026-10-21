@@ -305,5 +305,5 @@ export function buildScene(track: Track) {
     moteGeo.attributes.position.needsUpdate = true;
   }
 
-  return { scene, sun, update, setBloodMoon };
+  return { scene, sun, sky, update, setBloodMoon };
 }

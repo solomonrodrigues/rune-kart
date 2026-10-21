@@ -27,7 +27,8 @@ const go = (query: Record<string, string | number | boolean | undefined>) => {
 
 // --- Background: the chosen track, orbiting slowly ---
 function background() {
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  // Logarithmic depth: from this far up, the road (0.1 above the grass) would otherwise z-fight with it.
+  const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
   applyPixelSize(renderer, pixelSize());
   renderer.localClippingEnabled = true;
   renderer.domElement.className = 'menu-bg';
@@ -36,12 +37,17 @@ function background() {
   let current: { scene: THREE.Scene; update: (c: THREE.Camera, at: THREE.Vector3, dt: number, t: number) => void; centre: THREE.Vector3; radius: number } | null = null;
   const show = (id: string) => {
     const track = createTrack(TRACKS[id]);
-    const { scene, update } = buildScene(track);
-    // The orbit camera is far above the track; the in-race fog would swallow it, so push the fog back.
-    if (scene.fog instanceof THREE.Fog) { scene.fog.near = 260; scene.fog.far = 900; }
+    const { scene, sky, update } = buildScene(track);
     const xs = track.samples.map(s => s.x), zs = track.samples.map(s => s.z);
     const centre = new THREE.Vector3((Math.min(...xs) + Math.max(...xs)) / 2, 0, (Math.min(...zs) + Math.max(...zs)) / 2);
-    current = { scene, update, centre, radius: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) };
+    const radius = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
+    // The orbit camera is far above the track (further on bigger tracks); push the fog and far plane back to match.
+    const far = Math.max(900, radius * 2.5);
+    if (scene.fog instanceof THREE.Fog) { scene.fog.near = Math.max(260, radius); scene.fog.far = far; }
+    camera.far = far; camera.updateProjectionMatrix();
+    // The mountain ring (inner radius 390) would cut through a big track, so spread it out past the far edge.
+    sky.scale.setScalar(Math.max(1, radius * 1.6 / 390));
+    current = { scene, update, centre, radius };
   };
   const resize = () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); };
   /** Preview a pixel filter on the backdrop (the game picks it up when it starts). */
@@ -54,8 +60,8 @@ function background() {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     const a = now / 1000 * 0.05;
     const { centre, radius } = current;
-    // High and outside the track, looking down at about 50°, so the whole layout reads at a glance.
-    camera.position.set(centre.x + Math.sin(a) * radius * 0.6, radius * 0.75, centre.z + Math.cos(a) * radius * 0.6);
+    // High and outside the track, looking down at 45° from far enough back that the near side stays in frame.
+    camera.position.set(centre.x + Math.sin(a) * radius * 0.85, radius * 0.85, centre.z + Math.cos(a) * radius * 0.85);
     camera.lookAt(centre.x, 0, centre.z);
     current.update(camera, centre, dt, now / 1000);
     renderer.render(current.scene, camera);
