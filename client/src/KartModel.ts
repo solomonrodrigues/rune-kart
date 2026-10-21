@@ -230,6 +230,8 @@ export class KartModel {
     this.slide += (-k.driftDir * 0.35 - this.slide) * (1 - Math.exp(-10 * dt));
     // Spun out: whirl the body until the stun wears off.
     this.body.rotation.y = this.slide + (k.stunTime > 0 ? k.stunTime * 14 : 0);
+    // After a spin-out, while spells can't touch it: flicker, so everyone can see it's protected.
+    this.body.visible = !(k.graceTime > 0 && k.stunTime <= 0) || Math.floor(time * 14) % 3 !== 0;
     // Drift hop: a press of the drift button pops the body up (stretching), and it squashes as it lands.
     // Visual only — the kart itself never leaves the road.
     if (k.driftHeld && !this.lastHeld && k.grounded) this.hop = 0;

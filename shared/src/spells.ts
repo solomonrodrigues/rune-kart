@@ -32,6 +32,7 @@ export const MANA = {
   hasteBoost: 1.2,   // seconds of boost
   wardTime: 6,       // seconds a ward lasts unless it blocks a hit first
   stunTime: 1.0,     // seconds spun out when hit
+  grace: 2.0,        // seconds after a spin-out when spells can't hit you again: no stun-locking
   smite: {
     speed: 55, life: 2.0, radius: 1.3, height: 0.6,
     // Homing: locks on to a kart within `acquire` of its heading and `range` metres, turns at most `turnRate`
@@ -53,6 +54,7 @@ export function stepSpells(k: KartState, cast: number, dt: number): Spell | null
   k.mana = Math.min(MANA.max, k.mana + (MANA.regen * k.manaRegenMul + (k.driftDir ? MANA.driftRegen : 0)) * dt);
   for (const key of cdKeys) k[key] = Math.max(0, k[key] - dt);
   k.wardTime = Math.max(0, k.wardTime - dt);
+  k.graceTime = Math.max(0, k.graceTime - dt);
 
   const spell = SPELLS[cast];
   if (!spell || k.stunTime > 0 || k.mana < spell.cost || cooldownOf(k, cast) > 0) return null;
@@ -103,12 +105,12 @@ function homeIn(e: Effect, karts: [string, KartState][], dt: number) {
     return d < 0.01 || d > H.range ? null : { cos: (ox * hx + oz * hz) / d, d };
   };
   let target = e.target ? karts.find(([id]) => id === e.target)?.[1] : undefined;
-  const held = target && offNose(target);
+  const held = target && target.graceTime <= 0 && offNose(target); // a kart in its grace period is no target
   if (!held || held.cos < Math.cos(H.lose)) { target = undefined; e.target = ''; }
   if (!target) {
     let best = -Infinity;
     for (const [id, k] of karts) {
-      if (id === e.owner) continue; // never home on the caster
+      if (id === e.owner || k.graceTime > 0) continue; // never home on the caster, or a kart that can't be hit
       const o = offNose(k);
       if (!o || o.cos < Math.cos(H.acquire)) continue;
       const score = o.cos - o.d / H.range; // prefer near, and near the nose
@@ -124,10 +126,11 @@ function homeIn(e: Effect, karts: [string, KartState][], dt: number) {
   e.vz = Math.cos(heading + turn) * speed;
 }
 
-/** Lands a hit on a kart: a ward absorbs it, otherwise the kart spins out. */
+/** Lands a hit on a kart: a ward absorbs it, otherwise the kart spins out (and is safe for a while after). */
 export function hitKart(k: KartState): 'warded' | 'stunned' {
   if (k.wardTime > 0) { k.wardTime = 0; return 'warded'; }
   k.stunTime = MANA.stunTime;
+  k.graceTime = MANA.stunTime + MANA.grace;
   k.driftDir = 0;
   k.driftCharge = 0;
   k.boostTime = 0;
@@ -159,6 +162,7 @@ export function stepEffects(effects: Effect[], karts: [string, KartState][], tra
     if (e.kind === 'snare' && e.age < MANA.snare.arm * 0.5) continue; // still settling
     for (const [id, k] of karts) {
       if (id === e.owner && e.age < ownerImmune) continue;
+      if (k.graceTime > 0) continue; // just spun out: passes harmlessly through (a snare stays for the next kart)
       if (Math.abs(k.y + 0.5 - e.y) > 2 || (k.x - e.x) ** 2 + (k.z - e.z) ** 2 > radius * radius) continue;
       hitKart(k);
       dead.add(e);

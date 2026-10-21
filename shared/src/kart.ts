@@ -29,6 +29,7 @@ export interface KartState {
   cd0: number; cd1: number; cd2: number; cd3: number; // spell cooldowns, seconds left
   stunTime: number;   // spun out by a spell: no control until it runs out
   wardTime: number;   // a ward is up: absorbs the next hit
+  graceTime: number;  // just spun out: spells can't hit you until it runs out
   // Rescue (the crows): stray too far off the road, or sit on the grass too long, and you're carried back.
   offroadTime: number; // seconds on the grass without touching the road
   lastRoad: number;    // sample index where the kart was last on the road (-1 until it has been)
@@ -63,7 +64,7 @@ export function newKart(at: { x: number; y: number; z: number; yaw: number }): K
     x: at.x, y: at.y, z: at.z, vx: 0, vy: 0, vz: 0, yaw: at.yaw,
     nx: 0, ny: 1, nz: 0, grounded: 0, offroad: 0,
     driftDir: 0, driftCharge: 0, driftHeld: 0, boostTime: 0, boostTier: 0, steer: 0,
-    mana: MANA.start, manaRegenMul: 1, cd0: 0, cd1: 0, cd2: 0, cd3: 0, stunTime: 0, wardTime: 0,
+    mana: MANA.start, manaRegenMul: 1, cd0: 0, cd1: 0, cd2: 0, cd3: 0, stunTime: 0, wardTime: 0, graceTime: 0,
     offroadTime: 0, lastRoad: -1, rescue: 0,
   };
 }

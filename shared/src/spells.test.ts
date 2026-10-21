@@ -139,3 +139,44 @@ test('a snare arms, then stuns whoever drives over it', () => {
   for (let i = 0; i < 60 && !dead.size; i++) dead = stepEffects([e], [['them', victim]], track, 1 / 60);
   assert.ok(dead.has(e) && victim.stunTime > 0);
 });
+
+// --- After a spin-out: a grace period, so nobody gets stun-locked ---
+test('a kart that just spun out cannot be hit again until its grace runs out', () => {
+  const k = settled();
+  assert.equal(hitKart(k), 'stunned');
+  assert.ok(k.graceTime > MANA.stunTime, 'grace outlasts the spin');
+  // A second smite straight at it during the grace: passes harmlessly through.
+  const caster = settled(); caster.yaw = k.yaw;
+  Object.assign(caster, { x: k.x - Math.sin(k.yaw) * 20, z: k.z - Math.cos(k.yaw) * 20 });
+  const stunBefore = k.stunTime;
+  const e = spawnEffect(1, SPELLS[slot('smite')], 'me', caster)!;
+  for (let i = 0; i < 30; i++) stepEffects([e], [['me', caster], ['them', k]], track, 1 / 60);
+  assert.ok(k.stunTime <= stunBefore, 'not stunned again');
+  // Tick the grace away; then it can be hit.
+  for (let i = 0; i < 60 * (MANA.stunTime + MANA.grace) + 2; i++) stepKart(k, idle(), track);
+  assert.equal(k.graceTime, 0);
+  assert.equal(hitKart(k), 'stunned');
+});
+
+test('a snare waits out a kart in its grace period, then catches it', () => {
+  const caster = settled();
+  const e = spawnEffect(1, SPELLS[slot('snare')], 'me', caster)!;
+  const victim = newKart({ x: e.x, y: e.y, z: e.z, yaw: 0 });
+  victim.graceTime = 0.5;
+  let dead = new Set<Effect>();
+  for (let i = 0; i < 60 && !dead.size; i++) dead = stepEffects([e], [['them', victim]], track, 1 / 60);
+  assert.equal(dead.size, 0, 'the snare stays armed');
+  assert.equal(victim.stunTime, 0);
+  victim.graceTime = 0;
+  dead = stepEffects([e], [['them', victim]], track, 1 / 60);
+  assert.ok(dead.has(e) && victim.stunTime > 0, 'caught once the grace is over');
+});
+
+test('a homing smite ignores a kart in its grace period', () => {
+  const caster = onGrass(300, 300), target = onGrass(308, 330); // the kart the homing test locks on to
+  target.graceTime = 2;
+  const e = spawnEffect(1, SPELLS[slot('smite')], 'me', caster)!;
+  fly(e, [['me', caster], ['them', target]], 1);
+  assert.equal(e.target, '');
+  assert.equal(target.stunTime, 0);
+});

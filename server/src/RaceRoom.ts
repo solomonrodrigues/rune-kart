@@ -28,6 +28,7 @@ export class Kart extends Schema implements KartState {
   @type('number') cd0 = 0; @type('number') cd1 = 0; @type('number') cd2 = 0; @type('number') cd3 = 0;
   @type('number') stunTime = 0;
   @type('number') wardTime = 0;
+  @type('number') graceTime = 0;
   @type('number') offroadTime = 0;
   @type('number') lastRoad = -1;
   @type('number') rescue = 0;
