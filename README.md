@@ -79,7 +79,7 @@ behind.
 |---|---|---|
 | **Haste** | 30 | A burst of speed |
 | **Smite** | 40 | A bolt that homes in on a kart ahead and spins it out |
-| **Snare** | 35 | A rune trap dropped behind you; it stuns whoever drives over it |
+| **Snare** | 30 | A rune trap dropped behind you; it stuns whoever drives over it (up to 5 at once, each lasting 30 s) |
 | **Ward** | 45 | Blocks the next hit; it blinks just before it fades |
 
 ### Tracks

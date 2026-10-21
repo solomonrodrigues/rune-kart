@@ -53,7 +53,7 @@ function crackle(lines: THREE.LineSegments) {
   pos.needsUpdate = true;
 }
 
-const snareGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.08, 6);
+const snareGeo = new THREE.CylinderGeometry(MANA.snare.radius, MANA.snare.radius, 0.08, 6); // as big as it catches
 const ringGeo = new THREE.TorusGeometry(1, 0.08, 4, 16).rotateX(Math.PI / 2);
 const flashGeo = new THREE.IcosahedronGeometry(0.8, 1);
 

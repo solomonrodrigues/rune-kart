@@ -19,7 +19,7 @@ export interface Spell {
 export const SPELLS: Spell[] = [
   { id: 'haste', name: 'Haste', cost: 30, cooldown: 1.5, kind: 'self', color: 0x4fc3ff },
   { id: 'smite', name: 'Smite', cost: 40, cooldown: 1.0, kind: 'projectile', color: 0xd65cff },
-  { id: 'snare', name: 'Snare', cost: 35, cooldown: 2.0, kind: 'dropped', color: 0xff9d2e },
+  { id: 'snare', name: 'Snare', cost: 30, cooldown: 2.0, kind: 'dropped', color: 0xff9d2e }, // cheaper: less sure to land than a homing smite
   { id: 'ward', name: 'Ward', cost: 45, cooldown: 4.0, kind: 'self', color: 0x7dffb0 },
 ];
 
@@ -39,7 +39,9 @@ export const MANA = {
     // rad/s towards it, and lets go if the target ends up more than `lose` off its nose.
     acquire: 0.52, lose: 1.2, range: 60, turnRate: 2.0,
   },
-  snare: { life: 20, radius: 1.6, arm: 0.6, behind: 3, maxPerKart: 3 },
+  // Measured in bot races: 5 live traps lasting 30 s get ~63% of spammed snares hit, against ~54% for 3 × 20 s
+  // (most misses were traps replaced by newer ones before anyone arrived).
+  snare: { life: 30, radius: 2.0, arm: 0.6, behind: 3, maxPerKart: 5 },
 };
 
 export const NO_CAST = -1;
