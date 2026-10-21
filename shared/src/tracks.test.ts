@@ -125,3 +125,16 @@ test('citadel: fall short of the Leap and the crows carry you across, not back t
   const ahead = (k.lastRoad - leap.landing + n) % n;
   assert.ok(ahead >= 0 && ahead < 5, `set down at ${k.lastRoad}, landing is ${leap.landing}`);
 });
+
+test('citadel: fall off the inside of the spiral and the crows come almost at once', () => {
+  // Left the road high up the spiral, landed on the grass inside it — near the spiral's ground-level start,
+  // but driving back there would mean climbing it all again.
+  const S = citadel.samples, high = S.findIndex(s => s.y > 9 && s.y < 10);
+  const a = 300 * Math.PI / 180;
+  const k = newKart({ x: 200 + Math.sin(a) * 30, y: 0.4, z: -190 + Math.cos(a) * 30, yaw: 0 });
+  k.lastRoad = high;
+  let ticks = 0;
+  for (; ticks < 60 * 2 && k.rescue === 0; ticks++) stepKart(k, { steer: 0, throttle: 0, drift: false }, citadel);
+  assert.ok(k.rescue > 0 && ticks / 60 < 1, `rescued after ${(ticks / 60).toFixed(2)} s`);
+  assert.equal(k.lastRoad, high, 'back where it fell off');
+});

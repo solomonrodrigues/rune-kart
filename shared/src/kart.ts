@@ -53,6 +53,7 @@ export const KART = {
   wallBounce: 0.25,
   killY: -30,
   rescueAfter: 4, rescueDistance: 25, rescueHold: 1.5, // seconds on grass / metres past the road edge / seconds carried
+  rescueStranded: 0.5, // seconds on the ground before the crows come, when the road is out of reach above you
 };
 
 export const DT = 1 / 60;
@@ -225,7 +226,7 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
   k.nx = n.x; k.ny = n.y; k.nz = n.z;
   k.grounded = grounded ? 1 : 0;
 
-  // Rescue: too long on the grass, too far from the road, or fallen off the world.
+  // Rescue: too long on the grass, too far from the road, stranded below it, or fallen off the world.
   if (grounded && !k.offroad) {
     k.offroadTime = 0;
     k.lastRoad = nearestIndex(track, k.x, k.z, k.y);
@@ -233,7 +234,13 @@ export function stepKart(k: KartState, input: KartInput, track: Track, dt = DT):
     if (grounded) k.offroadTime += dt;
     const s = nearestSample(track, k.x, k.z);
     const far = (s.x - k.x) ** 2 + (s.z - k.z) ** 2 > (track.def.width / 2 + K.rescueDistance) ** 2;
-    if (k.offroadTime > K.rescueAfter || far || k.y < K.killY) rescue(k, track);
+    // Fallen from a bridge, the spiral or a jump: where you left the road is well above you, so any road
+    // you could drive to down here only loses ground — waiting adds to the loss, and the crows come almost
+    // at once. (Before you've been on the road at all, the nearest road by height stands in for it.)
+    const left = k.lastRoad >= 0 ? track.samples[k.lastRoad] : nearestSample(track, k.x, k.z, k.y);
+    const stranded = grounded && left.y - k.y > 3;
+    const waited = k.offroadTime > (stranded ? K.rescueStranded : K.rescueAfter);
+    if (waited || far || k.y < K.killY) rescue(k, track);
   }
   return cast;
 }

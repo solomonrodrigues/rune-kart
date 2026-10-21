@@ -245,3 +245,16 @@ test('one press, one drift: a drift that ends with the button still down does no
   drive(1, () => hold(0.8), k); // let go and press again
   assert.equal(k.driftDir, 1);
 });
+
+test('a kart stranded on the ground below the road is rescued almost at once', () => {
+  // Under the raised hairpin: the road is ~5 m overhead and there's no driving back up to it.
+  const top = track.samples.reduce((b, s, i) => (s.y > track.samples[b].y ? i : b), 0);
+  const s = track.samples[top];
+  assert.ok(s.y > 4, `hairpin at ${s.y.toFixed(1)} m`);
+  const k = newKart(spawnPoint(track, 0));
+  Object.assign(k, { x: s.x, y: GROUND_Y + 0.5, z: s.z, vx: 0, vy: 0, vz: 0 });
+  let ticks = 0;
+  for (; ticks < 60 * 2 && k.rescue === 0; ticks++) stepKart(k, idle, track);
+  assert.ok(k.rescue > 0, 'rescued');
+  assert.ok(ticks / 60 < KART.rescueStranded + 0.5, `took ${(ticks / 60).toFixed(2)} s`);
+});
