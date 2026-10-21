@@ -49,6 +49,7 @@ export class KartModel {
   private dust = new Dust();
   private grass = new GrassFlicks();
   private dustDebt = 0;
+  private landed = false; // the drift hop just touched down
   private tyreAt = new THREE.Vector3(); private puffV = new THREE.Vector3();
   private lastBoost = 0;
   private v1 = new THREE.Vector3();
@@ -71,6 +72,8 @@ export class KartModel {
   private manaFull = new THREE.Color();
   private tankPos = new THREE.Vector3();
   private slide = 0;
+  private hop = 1;      // drift hop progress, 0 → 1 (1: not hopping)
+  private lastHeld = 0; // last frame's drift button, to catch the press
   private wheelSpin = 0;
 
   /**
@@ -227,6 +230,20 @@ export class KartModel {
     this.slide += (-k.driftDir * 0.35 - this.slide) * (1 - Math.exp(-10 * dt));
     // Spun out: whirl the body until the stun wears off.
     this.body.rotation.y = this.slide + (k.stunTime > 0 ? k.stunTime * 14 : 0);
+    // Drift hop: a press of the drift button pops the body up (stretching), and it squashes as it lands.
+    // Visual only — the kart itself never leaves the road.
+    if (k.driftHeld && !this.lastHeld && k.grounded) this.hop = 0;
+    this.lastHeld = k.driftHeld;
+    if (this.hop < 1) {
+      const was = this.hop, AIR = 0.72; // the share of the hop spent in the air; the rest is the squash
+      this.hop = Math.min(1, this.hop + dt / 0.38);
+      let y = 0, sy = 1, sxz = 1;
+      if (this.hop < AIR) { const u = this.hop / AIR; y = 0.42 * Math.sin(Math.PI * u); sy = 1 + 0.08 * Math.sin(Math.PI * u); sxz = 1 - 0.03 * Math.sin(Math.PI * u); }
+      else { const v = (this.hop - AIR) / (1 - AIR); sy = 1 - 0.13 * Math.sin(Math.PI * v); sxz = 1 + 0.06 * Math.sin(Math.PI * v); }
+      this.body.position.y = y;
+      this.body.scale.set(sxz, sy, sxz);
+      if (was < AIR && this.hop >= AIR) this.landed = true; // a puff of smoke as it touches down (below)
+    }
     this.body.rotation.z = carry > 0 ? Math.sin(time * 3) * 0.12 * carry : 0;
     this.crows.visible = carry > 0;
     if (carry > 0) {
@@ -322,6 +339,14 @@ export class KartModel {
         this.puffV.x += k.vx * (grassy ? 0.4 : 0.35) + (rand() - 0.5) * 1.6; this.puffV.z += k.vz * (grassy ? 0.4 : 0.35) + (rand() - 0.5) * 1.6;
         if (grassy) { this.puffV.y = 2.5 + rand() * 2; this.grass.spawn(this.tyreAt, this.puffV, k.y); }
         else { this.puffV.y = 0.8 + rand(); this.dust.spawn(this.tyreAt, this.puffV, SMOKE, 0.18, 0.9 + rand() * 0.4); }
+      }
+    }
+    if (this.landed) { // the hop's landing: a little puff from each rear tyre
+      this.landed = false;
+      for (const side of [0.8, -0.8]) for (let n = 0; n < 3; n++) {
+        this.body.localToWorld(this.tyreAt.set(side, 0.1, -0.6));
+        this.puffV.set((Math.random() - 0.5) * 2, 0.6 + Math.random() * 0.6, (Math.random() - 0.5) * 2).addScaledVector(this.fwdW, -1);
+        this.dust.spawn(this.tyreAt, this.puffV, SMOKE, 0.2, 0.6);
       }
     }
     this.dust.update(dt);

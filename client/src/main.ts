@@ -280,7 +280,7 @@ let camYaw = local.yaw;
 let finishCam = 0; // 0 normal chase cam → 1 swung round to the front after you finish
 const camPos = new THREE.Vector3(), lookAt = new THREE.Vector3(), focus = new THREE.Vector3();
 
-let lastTier = 0, lastBoost = 0, lastStun = 0, lastRescue = 0;
+let lastTier = 0, lastBoost = 0, lastStun = 0, lastRescue = 0, lastHeld = 0;
 effects.onImpact = p => sound.impact(p.distanceTo(camera.position));
 
 // Race sounds: countdown beeps and GO, a chime each lap (a flourish for the last), a fanfare at the finish.
@@ -351,7 +351,8 @@ renderer.setAnimationLoop(now => {
   if (local.boostTime > lastBoost + 0.05) sound.boost(local.boostTier); // any boost: drift tier or Haste (0)
   if (local.stunTime > 0 && lastStun <= 0) sound.hit();
   if (local.rescue > 0 && lastRescue <= 0) sound.rescue(); // the crows have you
-  lastTier = tierNow; lastBoost = local.boostTime; lastStun = local.stunTime; lastRescue = local.rescue;
+  if (local.driftHeld && !lastHeld && local.grounded) sound.hop(); // the drift hop (KartModel draws it)
+  lastTier = tierNow; lastBoost = local.boostTime; lastStun = local.stunTime; lastRescue = local.rescue; lastHeld = local.driftHeld;
   sound.drive(kartSpeed(local), input.throttle, local.boostTime > 0, !!local.driftDir);
   raceSounds(now);
 

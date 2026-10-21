@@ -242,6 +242,26 @@ export class Sound {
   wallHit(force: number) { this.play('wall', { gain: Math.min(1, 0.25 + force * 0.06), rate: 0.9 + Math.random() * 0.2 }); }
   denied() { this.play('denied', { gain: 0.4, rate: 0.7 }); }
   hit() { this.play('hit', { gain: 0.9 }); this.thoom(0.6); }
+  /** The drift hop: a quick rising "hup", and a soft tap as the kart lands. */
+  hop() {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx, t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(240, t);
+    o.frequency.exponentialRampToValueAtTime(430, t + 0.09);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.07, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(g).connect(this.master);
+    o.start(t); o.stop(t + 0.15);
+    const n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), ng = ctx.createGain();
+    n.buffer = this.noise; f.type = 'lowpass'; f.frequency.value = 500;
+    ng.gain.setValueAtTime(0.0001, t + 0.27);
+    ng.gain.exponentialRampToValueAtTime(0.08, t + 0.28);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.36);
+    n.connect(f).connect(ng).connect(this.master);
+    n.start(t + 0.27, Math.random() * 0.5); n.stop(t + 0.4);
+  }
+
   /** The crows arrive to carry you back: two raspy caws over a flutter of wings. */
   rescue() {
     if (!this.ctx || this.muted) return;
