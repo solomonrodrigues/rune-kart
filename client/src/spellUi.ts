@@ -2,14 +2,16 @@
 import type { KartState } from 'shared/kart';
 import { MANA, SPELLS, cooldownOf, type Spell } from 'shared/spells';
 
-// Simple glyphs, stroked in the spell's colour.
+// Simple glyphs, engraved in the spell's rune colour.
 const ICONS: Record<Spell['id'], string> = {
   haste: '<path d="M3 6l6 6-6 6M10 6l6 6-6 6M17 7l4 5-4 5"/>',
   smite: '<path d="M14 2L5 13h6l-2 9 10-12h-6l1-8z"/><circle cx="12" cy="12" r="10.5" opacity=".35"/>',
   snare: '<circle cx="12" cy="12" r="9"/><path d="M12 4.5l6.5 11.5h-13z"/><path d="M12 9v4M12 15.5v.5"/>',
   ward: '<path d="M12 2.5l8 3v6c0 5-3.6 8.6-8 10-4.4-1.4-8-5-8-10v-6z"/><path d="M12 7v10M8.5 10.5h7"/>',
 };
-const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
+// The overlay's own palette: muted jewel tones, like inlaid stones on an iron relic. (The spells' world effects
+// keep their bright colours: they're meant to blaze on the road, but on the HUD they read as neon.)
+const RUNE_INK: Record<Spell['id'], string> = { haste: '#8fb4c9', smite: '#a985cf', snare: '#c79552', ward: '#86b597' };
 
 const root = document.getElementById('spells')!;
 root.innerHTML =
@@ -19,7 +21,7 @@ root.innerHTML =
   SPELLS.map((s, i) =>
     // A gothic-arched rune socket (glyph + cooldown), with the key plaque and mana-gem cost overhanging it,
     // and the spell's name engraved below.
-    `<div class="spell" style="--c:${hex(s.color)}" title="${s.name} — ${s.cost} mana">` +
+    `<div class="spell" style="--c:${RUNE_INK[s.id]}" title="${s.name} — ${s.cost} mana">` +
     `<div class="slot"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[s.id]}</svg><div class="cd"><span></span></div></div>` +
     `<kbd>${i + 1}</kbd><small class="cost">${s.cost}</small><b>${s.name}</b></div>`).join('') +
   `</div>`;

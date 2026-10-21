@@ -65,10 +65,11 @@
       #spells .spell .cost { position: absolute; top: 47px; left: 50%; transform: translateX(-50%); width: 22px; height: 22px; display: grid; place-items: center; z-index: 1;
         clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: radial-gradient(circle at 40% 35%, #b8c8ff, #2f4ed8 60%, #13207a); font: 700 9px var(--serif); color: #fff; text-shadow: 0 1px 1px #000; }
       #spells .spell b { margin-top: 13px; font-size: 11px; line-height: 1; font-variant: small-caps; letter-spacing: .06em; color: #8f7f5c; text-shadow: 0 -1px 0 #000, 0 1px 0 #ffffff14; }
-      /* Ready: the socket lights in the spell's colour. */
-      #spells .spell.ready .slot { box-shadow: inset 0 4px 9px #000, 0 0 0 2px #2a2830, 0 0 0 3px var(--c), 0 0 10px color-mix(in srgb, var(--c) 45%, transparent); }
-      #spells .spell.ready .slot::before { opacity: .5; }
-      #spells .spell.ready svg { opacity: 1; filter: drop-shadow(0 0 4px var(--c)); }
+      /* Ready: a tarnished-bronze ring touched with the rune's colour, a low glow in the socket, and the rune
+         itself engraved and faintly lit — candlelight on an inlaid stone, not neon. */
+      #spells .spell.ready .slot { box-shadow: inset 0 4px 9px #000, 0 0 0 2px #2a2830, 0 0 0 3px color-mix(in srgb, var(--c) 35%, var(--bronze-hi)), 0 0 6px color-mix(in srgb, var(--c) 22%, transparent); }
+      #spells .spell.ready .slot::before { opacity: .28; }
+      #spells .spell.ready svg { opacity: 1; stroke: color-mix(in srgb, var(--c) 75%, var(--gold)); filter: drop-shadow(0 1px 0 #000) drop-shadow(0 0 2px color-mix(in srgb, var(--c) 40%, transparent)); }
       #spells .spell.ready b { color: var(--gold); }
       /* Can't afford it: the gem goes dark red. */
       #spells .spell.poor .cost { background: radial-gradient(circle at 40% 35%, #ff9a9a, #9c1f1f 60%, #3a0808); }
