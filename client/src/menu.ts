@@ -7,6 +7,7 @@ import { createTrack } from 'shared/track';
 import { DEFAULT_TRACK, TRACKS } from 'shared/tracks';
 import { buildScene } from './scene';
 import { Sound } from './audio';
+import { applyPixelSize, PIXEL_SIZES, pixelSize, setPixelSize } from './pixel';
 
 const NAME_KEY = 'runekart.name';
 export function loadName() {
@@ -27,7 +28,7 @@ const go = (query: Record<string, string | number | boolean | undefined>) => {
 // --- Background: the chosen track, orbiting slowly ---
 function background() {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  applyPixelSize(renderer, pixelSize());
   renderer.localClippingEnabled = true;
   renderer.domElement.className = 'menu-bg';
   document.body.prepend(renderer.domElement);
@@ -43,6 +44,8 @@ function background() {
     current = { scene, update, centre, radius: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) };
   };
   const resize = () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); };
+  /** Preview a pixel filter on the backdrop (the game picks it up when it starts). */
+  const setPixels = (size: number) => { applyPixelSize(renderer, size); resize(); };
   addEventListener('resize', resize);
   resize();
   let last = performance.now();
@@ -57,7 +60,7 @@ function background() {
     current.update(camera, centre, dt, now / 1000);
     renderer.render(current.scene, camera);
   });
-  return show;
+  return { show, setPixels };
 }
 
 // --- Screens ---
@@ -67,7 +70,7 @@ const trackPicker = (selected: string) =>
 
 export function runMenu() {
   document.body.classList.add('in-menu');
-  const showTrack = background();
+  const { show: showTrack, setPixels } = background();
   const root = document.createElement('div');
   root.id = 'menu';
   document.body.append(root);
@@ -107,7 +110,11 @@ export function runMenu() {
     settings: () => {
       const slider = (id: string, label: string, v: number) =>
         `<label class="row"><span>${label}</span><input type="range" id="${id}" min="0" max="100" step="5" value="${Math.round(v * 100)}"><output for="${id}">${Math.round(v * 100)}%</output></label>`;
-      return `<h2>Settings</h2>${slider('volume', 'Volume', sound.volume)}${slider('musicVolume', 'Music', sound.musicVolume)}
+      const px = pixelSize();
+      const pixels = `<div class="row"><span>Pixels</span>${PIXEL_SIZES.map(v =>
+        `<button data-pixel="${v}" class="${v === px ? 'on' : ''}" aria-pressed="${v === px}">${v ? `${v}×` : 'Off'}</button>`).join('')}</div>`;
+      return `<h2>Settings</h2>${slider('volume', 'Volume', sound.volume)}${slider('musicVolume', 'Music', sound.musicVolume)}${pixels}
+      <p class="hint">Pixels: a retro pixel filter with dithering, drawn at a half, third or quarter of the resolution (also faster).</p>
       <p class="hint">In a race, M mutes everything and K turns the music off.</p>
       <div class="actions"><button data-go="main">Back</button></div>`;
     },
@@ -166,6 +173,7 @@ export function runMenu() {
       go({ host: true, track, laps, private: priv, player: name || undefined, lobby: name ? `${name}'s lobby` : undefined });
     }
     if (b.dataset.start === 'practice') go({ practice: true, track });
+    if (b.dataset.pixel !== undefined) { setPixelSize(Number(b.dataset.pixel)); setPixels(Number(b.dataset.pixel)); render('settings'); }
     if (b.dataset.room) go({ join: b.dataset.room, player: player() || undefined });
   });
   // Letting go of the Volume slider plays a click at the new level (the music previews itself as you drag).

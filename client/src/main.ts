@@ -10,6 +10,7 @@ import { loadName, runMenu } from './menu';
 import { KartModel } from './KartModel';
 import { EffectsView } from './effects';
 import { Sound } from './audio';
+import { applyPixelSize, ditherLevels, ditherPass, pixelSize } from './pixel';
 import { Minimap, type MapKart } from './minimap';
 import { fxCamera } from './arcane';
 import { deniedCast, renderSpells, setManaColour } from './spellUi';
@@ -64,8 +65,10 @@ addEventListener('keydown', e => { if (e.code === 'Escape') { joined?.leave(); l
 // --- Renderer / scene ---
 // No canvas MSAA: everything goes through the composer below, which antialiases with FXAA instead.
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-// Retina at 2× is ~78% more pixels than 1.5× for little visible gain on a low-poly game.
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+// Retina at 2× is ~78% more pixels than 1.5× for little visible gain on a low-poly game. With the pixel
+// filter (Settings) it draws at a fraction of that and the canvas scales up with hard pixels instead.
+const PIXEL = pixelSize();
+applyPixelSize(renderer, PIXEL);
 renderer.shadowMap.enabled = true;
 renderer.localClippingEnabled = true; // mana tanks clip their liquid to the mana level
 document.body.appendChild(renderer.domElement);
@@ -82,7 +85,9 @@ const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, 
 composer.addPass(new RenderPass(scene, camera));
 composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.85, 0.45, 0.55)); // strength, radius, threshold
 composer.addPass(new OutputPass());
+if (PIXEL) composer.addPass(ditherPass(ditherLevels(PIXEL)));
 const fxaa = new ShaderPass(FXAAShader); // after OutputPass: FXAA expects display (sRGB) colours
+fxaa.enabled = !PIXEL; // smoothing would only blur the pixels
 composer.addPass(fxaa);
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
