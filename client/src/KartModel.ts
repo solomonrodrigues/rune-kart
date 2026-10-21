@@ -5,6 +5,7 @@ import { Monkey } from './Monkey';
 import { mergeStatic } from './mergeStatic';
 import { RuneBurst, Sigil, Trail } from './arcane';
 import { crowGeometry } from './atmosphere';
+import { Dust, GrassFlicks, SkidMarks, SMOKE } from './tyres';
 
 const flat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 // Over-bright (HDR) colours: anything past the bloom threshold glows, so every spark tier, the boost
@@ -39,10 +40,16 @@ export class KartModel {
   private trails = [0, 1, 2, 3].map(() => new Trail());
   private twist = 0;
   private burst = new RuneBurst();
-  private sigil = new Sigil();
+  private sigil = new Sigil();             // the rune sigil at the exhaust, the boost's source
   // The rescue: a ring of crows that carry the kart back to the road, then fly off.
   private crows = new THREE.InstancedMesh(crowGeometry(), new THREE.MeshBasicMaterial({ color: 0x07060a, side: THREE.DoubleSide }), 7);
-  private crowM = new THREE.Matrix4(); private crowQ = new THREE.Quaternion(); private crowP = new THREE.Vector3(); private crowS = new THREE.Vector3();             // the rune sigil at the exhaust, the boost's source
+  private crowM = new THREE.Matrix4(); private crowQ = new THREE.Quaternion(); private crowP = new THREE.Vector3(); private crowS = new THREE.Vector3();
+  // Tyres: skid marks in a hard drift, grass flicked up off the grass, and a little smoke on the road.
+  private skids = new SkidMarks();
+  private dust = new Dust();
+  private grass = new GrassFlicks();
+  private dustDebt = 0;
+  private tyreAt = new THREE.Vector3(); private puffV = new THREE.Vector3();
   private lastBoost = 0;
   private v1 = new THREE.Vector3();
   private fwdW = new THREE.Vector3();
@@ -141,7 +148,7 @@ export class KartModel {
     this.body.add(this.flame);
     this.sigil.group.position.set(0, 0.62, -1.3); // just behind the orb, so it glows in the sigil's centre
     this.body.add(this.sigil.group);
-    this.fx.add(...this.trails.map(t => t.mesh), this.burst.group, this.crows);
+    this.fx.add(...this.trails.map(t => t.mesh), this.burst.group, this.crows, this.skids.mesh, this.dust.points, this.grass.mesh);
     this.crows.frustumCulled = false;
     this.crows.visible = false;
 
@@ -294,6 +301,31 @@ export class KartModel {
     this.lastBoost = k.boostTime;
     for (const t of this.trails) t.update(dt);
     this.burst.update(dt);
+
+    // Tyres: marks in a hard drift (orange sparks and up) on the road; behind the rear tyres, blades of grass
+    // flicked up off the grass, or a little smoke in a drift on the road.
+    const going = Math.hypot(k.vx, k.vz), onGround = !!k.grounded && k.rescue <= 0;
+    const drifting = onGround && !k.offroad && !!k.driftDir && going > 5;
+    const marking = drifting && driftTier(k) >= 2;
+    for (const tyre of [0, 1] as const) {
+      this.body.localToWorld(this.tyreAt.set(tyre ? -0.8 : 0.8, 0.03, -0.7));
+      this.skids.lay(tyre, this.tyreAt, this.rightW, marking, time);
+    }
+    this.skids.update(time);
+    const grassy = onGround && !!k.offroad && going > 4;
+    if (grassy || drifting) {
+      const rand = Math.random;
+      this.dustDebt += dt * (grassy ? 25 + going * 2 : 18);
+      for (; this.dustDebt >= 1; this.dustDebt--) {
+        this.body.localToWorld(this.tyreAt.set(rand() < 0.5 ? 0.8 : -0.8, grassy ? 0.05 : 0.15, -0.8));
+        this.puffV.copy(this.fwdW).multiplyScalar(-(1 + rand() * 2));
+        this.puffV.x += k.vx * (grassy ? 0.4 : 0.35) + (rand() - 0.5) * 1.6; this.puffV.z += k.vz * (grassy ? 0.4 : 0.35) + (rand() - 0.5) * 1.6;
+        if (grassy) { this.puffV.y = 2.5 + rand() * 2; this.grass.spawn(this.tyreAt, this.puffV, k.y); }
+        else { this.puffV.y = 0.8 + rand(); this.dust.spawn(this.tyreAt, this.puffV, SMOKE, 0.18, 0.9 + rand() * 0.4); }
+      }
+    }
+    this.dust.update(dt);
+    this.grass.update(dt);
     this.sigil.update(dt, boost > 0, colour);
 
     // Mana tank level: a world-horizontal surface at the right height through the tank.
@@ -308,6 +340,9 @@ export class KartModel {
     for (const t of this.trails) t.dispose();
     this.burst.dispose();
     this.sigil.dispose();
+    this.skids.dispose();
+    this.dust.dispose();
+    this.grass.dispose();
     this.crows.geometry.dispose();
     (this.crows.material as THREE.Material).dispose();
     this.root.traverse(o => {
